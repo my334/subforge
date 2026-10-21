@@ -205,3 +205,174 @@ def clean_cues(cues: Iterable[Cue], *, fix_overlaps: bool = True, min_duration: 
                 if cur.end <= cur.start:
                     cur.end = cur.start + min_duration
     return cleaned
+
+
+def scale_cues(cues: Iterable[Cue], factor: float) -> list[Cue]:
+    """Multiply every timing by factor.
+
+    Used for frame-rate conversion: a subtitle authored for a video at
+    ``from_fps`` is retimed for ``to_fps`` with ``factor = from_fps / to_fps``.
+    """
+
+    if factor <= 0:
+        raise ValueError("factor must be positive")
+    return [replace(cue, start=cue.start * factor, end=cue.end * factor) for cue in cues]
+
+
+def _split_text_chunks(text: str, parts: int, max_chars: int) -> list[str]:
+    """Split text into about ``parts`` chunks, preferring word boundaries.
+
+    Works for space-separated languages and for CJK text without spaces
+    (falls back to character cuts when a single "word" is too long).
+    """
+
+    flat = " ".join(text.split())
+    if parts <= 1 or len(flat) <= max_chars:
+        return [flat] if flat else []
+    target = max(1, len(flat) // parts)
+    chunks: list[str] = []
+    rest = flat
+    for _ in range(parts - 1):
+        if len(rest) <= max_chars:
+            break
+        cut = rest.rfind(" ", 0, max(target, max_chars) + 1)
+        if cut < target // 2:  # no usable word boundary: hard cut (CJK etc.)
+            cut = min(max_chars, len(rest))
+            chunks.append(rest[:cut])
+            rest = rest[cut:].lstrip()
+        else:
+            chunks.append(rest[:cut])
+            rest = rest[cut + 1 :].lstrip()
+    if rest:
+        chunks.append(rest)
+    # A long tail can remain if word boundaries were unfavourable; hard-split it.
+    final: list[str] = []
+    for chunk in chunks:
+        while len(chunk) > max_chars * 2:
+            final.append(chunk[:max_chars])
+            chunk = chunk[max_chars:]
+        final.append(chunk)
+    return [c for c in final if c]
+
+
+def split_cues(
+    cues: Iterable[Cue],
+    *,
+    max_chars: int = 42,
+    max_duration: float = 5.0,
+) -> list[Cue]:
+    """Split over-long cues into shorter ones (the classic "断句" step).
+
+    A cue is split when its text exceeds ``max_chars`` characters or its
+    duration exceeds ``max_duration`` seconds (when > 0). The original time
+    span is divided between the pieces in proportion to their text length.
+    """
+
+    result: list[Cue] = []
+    for cue in cues:
+        flat_len = len(" ".join(cue.text.split()))
+        parts = 1
+        if max_chars > 0 and flat_len > max_chars:
+            parts = max(parts, -(-flat_len // max_chars))
+        if max_duration > 0 and cue.duration > max_duration:
+            parts = max(parts, int(cue.duration // max_duration) + 1)
+        if parts <= 1:
+            result.append(cue)
+            continue
+        chunks = _split_text_chunks(cue.text, parts, max_chars if max_chars > 0 else 10**9)
+        if len(chunks) <= 1:
+            result.append(cue)
+            continue
+        total = sum(len(c) for c in chunks) or 1
+        span = cue.end - cue.start
+        cursor = cue.start
+        for i, chunk in enumerate(chunks):
+            if i == len(chunks) - 1:
+                piece_end = cue.end
+            else:
+                piece_end = cursor + span * (len(chunk) / total)
+            result.append(Cue(start=cursor, end=piece_end, text=chunk))
+            cursor = piece_end
+    return result
+
+
+def validate_cues(
+    cues: Iterable[Cue],
+    *,
+    max_chars_per_line: int = 42,
+    max_cps: float = 21.0,
+    min_duration: float = 0.3,
+    max_duration: float = 7.0,
+) -> list[dict]:
+    """Check cues for common quality problems; returns a list of issues.
+
+    Each issue is a dict with ``cue`` (1-based position), ``level``
+    ("error" or "warning"), ``kind`` and ``message``.
+    """
+
+    issues: list[dict] = []
+    max_end_so_far = 0.0
+    for pos, cue in enumerate(cues, start=1):
+        def add(level: str, kind: str, message: str) -> None:
+            issues.append({"cue": pos, "level": level, "kind": kind, "message": message})
+
+        if not cue.text.strip():
+            add("error", "empty", "cue has no text")
+            continue
+        if cue.end <= cue.start:
+            add("error", "non_positive_duration", "end time is not after start time")
+            continue
+        if cue.start < max_end_so_far - 1e-9:
+            add("warning", "overlap", "starts before a previous cue ends")
+        max_end_so_far = max(max_end_so_far, cue.end)
+        if cue.duration < min_duration:
+            add("warning", "too_short", f"duration {cue.duration:.2f}s is below {min_duration}s")
+        if cue.duration > max_duration:
+            add("warning", "too_long", f"duration {cue.duration:.2f}s exceeds {max_duration}s")
+        for line in cue.text.splitlines():
+            if len(line) > max_chars_per_line:
+                add("warning", "long_line", f"line has {len(line)} chars (limit {max_chars_per_line})")
+                break
+        chars = len(cue.text.replace("\n", ""))
+        cps = chars / cue.duration if cue.duration > 0 else float("inf")
+        if cps > max_cps:
+            add("warning", "fast_cps", f"reading speed {cps:.1f} chars/s exceeds {max_cps}")
+    return issues
+
+
+def _format_ass_timestamp(seconds: float) -> str:
+    if seconds < 0:
+        seconds = 0.0
+    total_cs = int(round(seconds * 100))
+    hours, rem = divmod(total_cs, 360_000)
+    minutes, rem = divmod(rem, 6_000)
+    secs, cs = divmod(rem, 100)
+    return f"{hours:d}:{minutes:02d}:{secs:02d}.{cs:02d}"
+
+
+_ASS_HEADER = """[Script Info]
+Title: SubForge export
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 0
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,48,&H00FFFFFF,&H000000FF,&H00000000,&H64000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,30,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+
+
+def write_ass(cues: Iterable[Cue]) -> str:
+    """Write cues as a basic ASS/SSA file (default style, write-only export)."""
+
+    lines = [_ASS_HEADER]
+    for cue in cues:
+        text = clean_text(cue.text).replace("\n", r"\N")
+        lines.append(
+            f"Dialogue: 0,{_format_ass_timestamp(cue.start)},{_format_ass_timestamp(cue.end)},Default,,0,0,0,,{text}"
+        )
+    return "\n".join(lines) + "\n"

@@ -1,6 +1,18 @@
 import unittest
 
-from subforge.srt import clean_cues, parse_srt, parse_vtt, shift_cues, write_srt, write_vtt
+from subforge.srt import (
+    Cue,
+    clean_cues,
+    parse_srt,
+    parse_vtt,
+    scale_cues,
+    shift_cues,
+    split_cues,
+    validate_cues,
+    write_ass,
+    write_srt,
+    write_vtt,
+)
 
 
 SAMPLE_SRT = """1
@@ -41,6 +53,47 @@ class SubtitleTests(unittest.TestCase):
         cues = clean_cues(parse_srt(SAMPLE_SRT))
         self.assertEqual(cues[0].text, "Hello world.")
         self.assertGreaterEqual(cues[1].start, cues[0].end)
+
+    def test_scale_cues_for_fps_conversion(self):
+        cues = parse_srt(SAMPLE_SRT)
+        scaled = scale_cues(cues, 2.0)
+        self.assertEqual(scaled[0].start, 2.0)
+        self.assertEqual(scaled[0].end, 7.0)
+        identity = scale_cues(cues, 25 / 25)
+        self.assertEqual(identity[1].start, cues[1].start)
+
+    def test_split_long_cue_keeps_timing_span(self):
+        long_text = " ".join(["word"] * 30)  # 149 chars
+        cue = Cue(start=10.0, end=16.0, text=long_text)
+        pieces = split_cues([cue], max_chars=30, max_duration=0)
+        self.assertGreaterEqual(len(pieces), 4)
+        self.assertEqual(pieces[0].start, 10.0)
+        self.assertEqual(pieces[-1].end, 16.0)
+        for prev, cur in zip(pieces, pieces[1:]):
+            self.assertAlmostEqual(prev.end, cur.start, places=6)
+        for piece in pieces:
+            self.assertLessEqual(len(piece.text), 34)  # max_chars + one word
+
+    def test_split_cjk_text_without_spaces(self):
+        cue = Cue(start=0.0, end=6.0, text="这是一个没有空格的长句子用来测试中文断句功能是否正常工作")
+        pieces = split_cues([cue], max_chars=10, max_duration=0)
+        self.assertGreaterEqual(len(pieces), 3)
+        self.assertEqual("".join(p.text for p in pieces), cue.text)
+
+    def test_validate_reports_overlap_and_errors(self):
+        issues = validate_cues(parse_srt(SAMPLE_SRT))
+        kinds = {i["kind"] for i in issues}
+        self.assertIn("overlap", kinds)  # cue 2 starts at 3.25, cue 1 ends at 3.5
+        bad = validate_cues([Cue(start=1.0, end=1.0, text="x"), Cue(start=2.0, end=3.0, text="  ")])
+        levels = {(i["cue"], i["level"]) for i in bad}
+        self.assertIn((1, "error"), levels)
+        self.assertIn((2, "error"), levels)
+
+    def test_write_ass(self):
+        out = write_ass(parse_srt(SAMPLE_SRT))
+        self.assertIn("[Events]", out)
+        self.assertIn("Dialogue: 0,0:00:01.00,0:00:03.50,Default", out)
+        self.assertIn("Hello world.", out)  # tags stripped by clean_text
 
 
 if __name__ == "__main__":

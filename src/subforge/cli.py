@@ -14,7 +14,11 @@ from .srt import (
     clean_cues,
     parse_srt,
     parse_vtt,
+    scale_cues,
     shift_cues,
+    split_cues,
+    validate_cues,
+    write_ass,
     write_srt,
     write_txt,
     write_vtt,
@@ -22,8 +26,10 @@ from .srt import (
 
 
 def _read_cues(path: Path) -> list[Cue]:
-    text = path.read_text(encoding="utf-8-sig")
     suffix = path.suffix.lower()
+    if suffix == ".ass":
+        raise SystemExit("ASS input is not supported yet (ASS is an export-only format for now).")
+    text = path.read_text(encoding="utf-8-sig")
     if suffix == ".vtt":
         return parse_vtt(text)
     if suffix == ".srt":
@@ -41,8 +47,10 @@ def _write_cues(path: Path, cues: list[Cue]) -> None:
         content = write_vtt(cues)
     elif suffix == ".txt":
         content = write_txt(cues)
+    elif suffix == ".ass":
+        content = write_ass(cues)
     else:
-        raise SystemExit("Output must end in .srt, .vtt, or .txt")
+        raise SystemExit("Output must end in .srt, .vtt, .txt, or .ass")
     path.write_text(content, encoding="utf-8")
 
 
@@ -96,6 +104,49 @@ def cmd_info(args: argparse.Namespace) -> int:
     else:
         for key, value in data.items():
             print(f"{key}: {value}")
+    return 0
+
+
+def cmd_fps(args: argparse.Namespace) -> int:
+    if args.from_fps <= 0 or args.to_fps <= 0:
+        raise SystemExit("Frame rates must be positive numbers")
+    factor = args.from_fps / args.to_fps
+    cues = scale_cues(_read_cues(args.input), factor)
+    _write_cues(args.output, cues)
+    print(f"Retimed {len(cues)} cues from {args.from_fps} fps to {args.to_fps} fps (x{factor:.6f}) -> {args.output}")
+    return 0
+
+
+def cmd_split(args: argparse.Namespace) -> int:
+    cues = split_cues(
+        _read_cues(args.input),
+        max_chars=args.max_chars,
+        max_duration=args.max_duration,
+    )
+    _write_cues(args.output, cues)
+    print(f"Split into {len(cues)} cues -> {args.output}")
+    return 0
+
+
+def cmd_validate(args: argparse.Namespace) -> int:
+    cues = _read_cues(args.input)
+    issues = validate_cues(
+        cues,
+        max_chars_per_line=args.max_chars_per_line,
+        max_cps=args.max_cps,
+    )
+    if args.json:
+        print(json.dumps({"cues": len(cues), "issues": issues}, ensure_ascii=False, indent=2))
+    elif not issues:
+        print(f"OK: {len(cues)} cues, no issues found")
+    else:
+        for issue in issues:
+            print(f"cue {issue['cue']}: [{issue['level']}] {issue['kind']} - {issue['message']}")
+        errors = sum(1 for i in issues if i["level"] == "error")
+        print(f"{len(issues)} issue(s): {errors} error(s), {len(issues) - errors} warning(s)")
+    has_error = any(i["level"] == "error" for i in issues)
+    if has_error or (args.strict and issues):
+        return 1
     return 0
 
 
@@ -188,6 +239,28 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("input", type=Path)
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_info)
+
+    p = sub.add_parser("fps", help="Retime subtitles between frame rates (e.g. 25 -> 23.976)")
+    p.add_argument("input", type=Path)
+    p.add_argument("output", type=Path)
+    p.add_argument("--from-fps", type=float, required=True)
+    p.add_argument("--to-fps", type=float, required=True)
+    p.set_defaults(func=cmd_fps)
+
+    p = sub.add_parser("split", help="Split over-long cues into shorter ones")
+    p.add_argument("input", type=Path)
+    p.add_argument("output", type=Path)
+    p.add_argument("--max-chars", type=int, default=42)
+    p.add_argument("--max-duration", type=float, default=5.0, help="Seconds; 0 disables the duration rule")
+    p.set_defaults(func=cmd_split)
+
+    p = sub.add_parser("validate", help="Check subtitles for overlaps, timing and readability problems")
+    p.add_argument("input", type=Path)
+    p.add_argument("--max-chars-per-line", type=int, default=42)
+    p.add_argument("--max-cps", type=float, default=21.0, help="Max reading speed in chars/second")
+    p.add_argument("--strict", action="store_true", help="Exit non-zero on warnings too")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_validate)
 
     p = sub.add_parser("extract-audio", help="Extract 16kHz mono audio with ffmpeg")
     p.add_argument("input", type=Path)

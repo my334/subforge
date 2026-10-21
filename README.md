@@ -67,6 +67,24 @@ Inspect a subtitle file:
 subforge info examples/sample.srt
 ```
 
+Check a subtitle file for problems (overlaps, unreadably fast lines, ...):
+
+```bash
+subforge validate examples/sample.srt
+```
+
+Split over-long cues into short-video-friendly pieces:
+
+```bash
+subforge split sample.srt sample.split.srt --max-chars 42 --max-duration 5
+```
+
+Retime subtitles authored for a different frame rate (a classic drift fix):
+
+```bash
+subforge fps sample.srt sample.23976.srt --from-fps 25 --to-fps 23.976
+```
+
 Extract mono 16 kHz audio for speech recognition:
 
 ```bash
@@ -89,10 +107,13 @@ subforge burn lecture.mp4 lecture.srt lecture.hardsub.mp4
 
 | Command | What it does |
 | --- | --- |
-| `convert` | Convert between `.srt`, `.vtt`, and `.txt` |
+| `convert` | Convert between `.srt`, `.vtt`, `.txt`; export `.ass` (write-only) |
 | `shift` | Move all cue timings by a number of seconds |
 | `clean` | Remove HTML/ASS tags, drop empty cues, repair overlaps |
 | `info` | Print cue count, duration and average cue length |
+| `validate` | Report overlaps, timing problems and reading-speed issues |
+| `split` | Split over-long cues at word boundaries with proportional timing |
+| `fps` | Retime subtitles between frame rates (e.g. 25 → 23.976) |
 | `extract-audio` | Use ffmpeg to extract 16 kHz mono WAV audio |
 | `transcribe` | Use faster-whisper to create subtitles from audio/video |
 | `burn` | Use ffmpeg to burn subtitles into a video file |
