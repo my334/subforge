@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "subforge"
+version = "0.1.0"
+description = "A small video subtitle toolkit: convert, shift, clean, transcribe and burn subtitles."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "my334" }]
+keywords = ["subtitle", "srt", "vtt", "video", "ffmpeg", "whisper"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Topic :: Multimedia :: Video",
+]
+
+[project.optional-dependencies]
+whisper = ["faster-whisper>=1.0"]
+
+[project.scripts]
+subforge = "subforge.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

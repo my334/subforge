@@ -1,0 +1,11 @@
+1
+00:00:01,000 --> 00:00:03,500
+Welcome to SubForge.
+
+2
+00:00:03,500 --> 00:00:06,000
+This sample subtitle can be converted, shifted and cleaned.
+
+3
+00:00:06,000 --> 00:00:08,000
+Try: subforge convert examples/sample.srt sample.vtt
