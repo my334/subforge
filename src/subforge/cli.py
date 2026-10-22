@@ -29,7 +29,13 @@ def _read_cues(path: Path) -> list[Cue]:
     suffix = path.suffix.lower()
     if suffix == ".ass":
         raise SystemExit("ASS input is not supported yet (ASS is an export-only format for now).")
-    text = path.read_text(encoding="utf-8-sig")
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+    except FileNotFoundError:
+        raise SystemExit(f"Error: input file not found: {path}") from None
+    except OSError as exc:
+        detail = exc.strerror or str(exc)
+        raise SystemExit(f"Error: cannot read input file {path}: {detail}") from None
     if suffix == ".vtt":
         return parse_vtt(text)
     if suffix == ".srt":
