@@ -98,11 +98,15 @@ def cmd_info(args: argparse.Namespace) -> int:
         print("No cues found")
         return 0
     total_chars = sum(len(cue.text.replace("\n", "")) for cue in cues)
+    # Use the full span, not the first cue: input cues are not guaranteed to
+    # be in chronological order.
+    starts_at = min(cue.start for cue in cues)
+    ends_at = max(cue.end for cue in cues)
     data = {
         "cues": len(cues),
-        "starts_at": round(cues[0].start, 3),
-        "ends_at": round(max(cue.end for cue in cues), 3),
-        "duration_seconds": round(max(cue.end for cue in cues) - cues[0].start, 3),
+        "starts_at": round(starts_at, 3),
+        "ends_at": round(ends_at, 3),
+        "duration_seconds": round(ends_at - starts_at, 3),
         "average_chars_per_cue": round(total_chars / len(cues), 2),
     }
     if args.json:
