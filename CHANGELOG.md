@@ -2,6 +2,12 @@
 
 All notable changes to SubForge are documented here.
 
+## Unreleased
+
+- **`info`** fix: `starts_at` and `duration_seconds` now reflect the full
+  time span (min start / max end) instead of assuming the first cue is the
+  earliest, so unsorted cue files report correct statistics.
+
 ## 0.2.0 — 2026-10-21
 
 Feature batch inspired by established subtitle tools (VideoLingo /
