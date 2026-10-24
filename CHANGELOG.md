@@ -4,6 +4,11 @@ All notable changes to SubForge are documented here.
 
 ## Unreleased
 
+- **`split`** fix: the `--max-duration` rule now actually splits cues whose
+  text is shorter than `--max-chars` (previously such cues were never
+  split, and `--max-chars 0` disabled splitting entirely). Word-boundary
+  preference now favors cuts near the target chunk size, so
+  duration-driven pieces come out roughly even.
 - **`info`** fix: `starts_at` and `duration_seconds` now reflect the full
   time span (min start / max end) instead of assuming the first cue is the
   earliest, so unsorted cue files report correct statistics.

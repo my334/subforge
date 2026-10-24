@@ -224,20 +224,33 @@ def _split_text_chunks(text: str, parts: int, max_chars: int) -> list[str]:
 
     Works for space-separated languages and for CJK text without spaces
     (falls back to character cuts when a single "word" is too long).
+
+    ``max_chars`` caps each chunk when it is the driving limit; a value
+    <= 0 disables the character rule (e.g. when the split is driven only
+    by ``max_duration``) and the text is still divided into ``parts``
+    roughly even chunks.
     """
 
     flat = " ".join(text.split())
-    if parts <= 1 or len(flat) <= max_chars:
+    if parts <= 1 or not flat:
         return [flat] if flat else []
     target = max(1, len(flat) // parts)
+    # Per-chunk hard ceiling: max_chars when it drives the split, otherwise
+    # the target size itself (a duration-driven split of short text).
+    ceiling = max_chars if max_chars > 0 else target
     chunks: list[str] = []
     rest = flat
     for _ in range(parts - 1):
-        if len(rest) <= max_chars:
+        if not rest:
             break
-        cut = rest.rfind(" ", 0, max(target, max_chars) + 1)
+        # Prefer a word boundary near the target size ...
+        cut = rest.rfind(" ", 0, target + 1)
+        if cut < target // 2 and ceiling > target:
+            # ... but when max_chars drives the split, a later boundary up
+            # to the ceiling is still better than a hard cut.
+            cut = rest.rfind(" ", target + 1, min(len(rest), ceiling + 1))
         if cut < target // 2:  # no usable word boundary: hard cut (CJK etc.)
-            cut = min(max_chars, len(rest))
+            cut = min(max(target, ceiling), len(rest))
             chunks.append(rest[:cut])
             rest = rest[cut:].lstrip()
         else:
@@ -248,9 +261,9 @@ def _split_text_chunks(text: str, parts: int, max_chars: int) -> list[str]:
     # A long tail can remain if word boundaries were unfavourable; hard-split it.
     final: list[str] = []
     for chunk in chunks:
-        while len(chunk) > max_chars * 2:
-            final.append(chunk[:max_chars])
-            chunk = chunk[max_chars:]
+        while len(chunk) > ceiling * 2:
+            final.append(chunk[:ceiling])
+            chunk = chunk[ceiling:]
         final.append(chunk)
     return [c for c in final if c]
 
@@ -264,8 +277,10 @@ def split_cues(
     """Split over-long cues into shorter ones (the classic "断句" step).
 
     A cue is split when its text exceeds ``max_chars`` characters or its
-    duration exceeds ``max_duration`` seconds (when > 0). The original time
-    span is divided between the pieces in proportion to their text length.
+    duration exceeds ``max_duration`` seconds (when > 0). A ``max_chars``
+    of 0 disables the character rule so the duration rule works on its own.
+    The original time span is divided between the pieces in proportion to
+    their text length.
     """
 
     result: list[Cue] = []
@@ -279,7 +294,7 @@ def split_cues(
         if parts <= 1:
             result.append(cue)
             continue
-        chunks = _split_text_chunks(cue.text, parts, max_chars if max_chars > 0 else 10**9)
+        chunks = _split_text_chunks(cue.text, parts, max_chars)
         if len(chunks) <= 1:
             result.append(cue)
             continue

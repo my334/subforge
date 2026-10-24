@@ -260,7 +260,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("split", help="Split over-long cues into shorter ones")
     p.add_argument("input", type=Path)
     p.add_argument("output", type=Path)
-    p.add_argument("--max-chars", type=int, default=42)
+    p.add_argument("--max-chars", type=int, default=42, help="0 disables the character rule")
     p.add_argument("--max-duration", type=float, default=5.0, help="Seconds; 0 disables the duration rule")
     p.set_defaults(func=cmd_split)
 

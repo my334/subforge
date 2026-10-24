@@ -89,6 +89,28 @@ class SubtitleTests(unittest.TestCase):
         self.assertIn((1, "error"), levels)
         self.assertIn((2, "error"), levels)
 
+    def test_split_by_duration_with_short_text(self):
+        # Duration-driven split must work even when the text is shorter
+        # than max_chars (previously it silently produced a single chunk).
+        cue = Cue(start=0.0, end=11.0, text=" ".join(["word"] * 6))  # 30 chars
+        pieces = split_cues([cue], max_chars=42, max_duration=5.0)
+        self.assertGreaterEqual(len(pieces), 2)
+        self.assertEqual(pieces[0].start, 0.0)
+        self.assertEqual(pieces[-1].end, 11.0)
+        for prev, cur in zip(pieces, pieces[1:]):
+            self.assertAlmostEqual(prev.end, cur.start, places=6)
+        self.assertEqual(
+            " ".join(p.text for p in pieces), " ".join(cue.text.split())
+        )
+
+    def test_split_by_duration_with_max_chars_disabled(self):
+        cue = Cue(start=0.0, end=11.0, text="这是一个没有空格的长句子用来测试中文断句功能是否正常工作")
+        pieces = split_cues([cue], max_chars=0, max_duration=5.0)
+        self.assertGreaterEqual(len(pieces), 2)
+        self.assertEqual(pieces[0].start, 0.0)
+        self.assertEqual(pieces[-1].end, 11.0)
+        self.assertEqual("".join(p.text for p in pieces), cue.text)
+
     def test_write_ass(self):
         out = write_ass(parse_srt(SAMPLE_SRT))
         self.assertIn("[Events]", out)
