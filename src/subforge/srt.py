@@ -46,6 +46,9 @@ def parse_timestamp(value: str) -> float:
     minutes = int(match.group("m"))
     seconds = int(match.group("s"))
     millis = int(match.group("ms"))
+    if minutes >= 60 or seconds >= 60:
+        # Without this, "00:75:00,000" would silently parse as 4500s.
+        raise ValueError(f"Invalid timestamp: {value!r}")
     return hours * 3600 + minutes * 60 + seconds + millis / 1000
 
 
@@ -91,10 +94,17 @@ def parse_srt(text: str) -> list[Cue]:
             maybe_index = lines[0].strip()
             if maybe_index.isdigit():
                 index = int(maybe_index)
+        try:
+            start = parse_timestamp(match.group("start"))
+            end = parse_timestamp(match.group("end"))
+        except ValueError:
+            # Skip a cue with an out-of-range timestamp, like any other
+            # malformed timing line, instead of aborting the whole parse.
+            continue
         cues.append(
             Cue(
-                start=parse_timestamp(match.group("start")),
-                end=parse_timestamp(match.group("end")),
+                start=start,
+                end=end,
                 text="\n".join(lines[timing_pos + 1 :]).strip(),
                 index=index,
             )
@@ -130,10 +140,17 @@ def parse_vtt(text: str) -> list[Cue]:
         match = _TIMING_RE.match(lines[timing_pos].strip())
         if not match:
             continue
+        try:
+            start = parse_timestamp(match.group("start"))
+            end = parse_timestamp(match.group("end"))
+        except ValueError:
+            # Skip a cue with an out-of-range timestamp, like any other
+            # malformed timing line, instead of aborting the whole parse.
+            continue
         cues.append(
             Cue(
-                start=parse_timestamp(match.group("start")),
-                end=parse_timestamp(match.group("end")),
+                start=start,
+                end=end,
                 text="\n".join(lines[timing_pos + 1 :]).strip(),
             )
         )

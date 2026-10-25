@@ -4,6 +4,7 @@ from subforge.srt import (
     Cue,
     clean_cues,
     parse_srt,
+    parse_timestamp,
     parse_vtt,
     scale_cues,
     shift_cues,
@@ -110,6 +111,21 @@ class SubtitleTests(unittest.TestCase):
         self.assertEqual(pieces[0].start, 0.0)
         self.assertEqual(pieces[-1].end, 11.0)
         self.assertEqual("".join(p.text for p in pieces), cue.text)
+
+    def test_parse_timestamp_rejects_out_of_range_fields(self):
+        self.assertEqual(parse_timestamp("00:59:59,999"), 3599.999)
+        for bad in ("00:60:00,000", "00:75:00,000", "00:00:60,000", "00:00:90,500"):
+            with self.assertRaises(ValueError):
+                parse_timestamp(bad)
+
+    def test_parse_srt_skips_cue_with_out_of_range_timestamp(self):
+        text = (
+            "1\n00:75:00,000 --> 00:00:05,000\nBad cue\n\n"
+            "2\n00:00:06,000 --> 00:00:08,000\nGood cue\n"
+        )
+        cues = parse_srt(text)
+        self.assertEqual(len(cues), 1)
+        self.assertEqual(cues[0].text, "Good cue")
 
     def test_write_ass(self):
         out = write_ass(parse_srt(SAMPLE_SRT))
