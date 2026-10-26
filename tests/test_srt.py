@@ -35,6 +35,15 @@ class SubtitleTests(unittest.TestCase):
         out = write_srt(cues)
         self.assertIn("00:00:01,000 --> 00:00:03,500", out)
 
+    def test_parse_vtt_without_blank_line_after_header(self):
+        # A cue directly after the WEBVTT header (no blank line) used to
+        # be discarded along with the header; only the header line is
+        # dropped now.
+        cues = parse_vtt("WEBVTT\n00:00:01,000 --> 00:00:03,000\nHello world\n")
+        self.assertEqual(len(cues), 1)
+        self.assertEqual(cues[0].text, "Hello world")
+        self.assertEqual(cues[0].start, 1.0)
+
     def test_vtt_round_trip(self):
         cues = parse_srt(SAMPLE_SRT)
         vtt = write_vtt(cues)

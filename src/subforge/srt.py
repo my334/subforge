@@ -124,7 +124,13 @@ def parse_vtt(text: str) -> list[Cue]:
         # Drop the header line (and optional header metadata lines up to the
         # first blank line) before the generic block parser sees it.
         parts = re.split(r"\n\s*\n", text, maxsplit=1)
-        text = parts[1] if len(parts) == 2 else ""
+        if len(parts) == 2:
+            text = parts[1]
+        else:
+            # No blank line after the header: drop just the header line
+            # instead of discarding the whole file, so a cue that follows
+            # the header directly is still parsed.
+            text = text.split("\n", 1)[1] if "\n" in text else ""
 
     cues: list[Cue] = []
     for lines in _parse_blocks(text):
