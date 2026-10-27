@@ -4,6 +4,11 @@ All notable changes to SubForge are documented here.
 
 ## Unreleased
 
+- **`validate`** fix: overlap detection now checks real interval overlap
+  against earlier cues instead of "starts before the latest end seen so
+  far", so disjoint cues listed out of chronological order (e.g. 10-12s
+  followed by 0-2s) are no longer falsely reported as overlapping, while
+  genuinely overlapping pairs are still caught in either order.
 - **`split`** fix: the `--max-duration` rule now actually splits cues whose
   text is shorter than `--max-chars` (previously such cues were never
   split, and `--max-chars 0` disabled splitting entirely). Word-boundary

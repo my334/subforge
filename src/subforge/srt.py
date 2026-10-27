@@ -349,7 +349,7 @@ def validate_cues(
     """
 
     issues: list[dict] = []
-    max_end_so_far = 0.0
+    previous: list[Cue] = []
     for pos, cue in enumerate(cues, start=1):
         def add(level: str, kind: str, message: str) -> None:
             issues.append({"cue": pos, "level": level, "kind": kind, "message": message})
@@ -360,9 +360,16 @@ def validate_cues(
         if cue.end <= cue.start:
             add("error", "non_positive_duration", "end time is not after start time")
             continue
-        if cue.start < max_end_so_far - 1e-9:
-            add("warning", "overlap", "starts before a previous cue ends")
-        max_end_so_far = max(max_end_so_far, cue.end)
+        # Check real interval overlap against earlier cues, not just
+        # "starts before the latest end seen so far": for cues out of
+        # chronological order, the old max-end check falsely flagged
+        # disjoint cues (e.g. 10-12s followed by 0-2s) as overlapping.
+        if any(
+            cue.start < prev.end - 1e-9 and prev.start < cue.end - 1e-9
+            for prev in previous
+        ):
+            add("warning", "overlap", "overlaps another cue")
+        previous.append(cue)
         if cue.duration < min_duration:
             add("warning", "too_short", f"duration {cue.duration:.2f}s is below {min_duration}s")
         if cue.duration > max_duration:

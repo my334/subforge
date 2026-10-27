@@ -99,6 +99,19 @@ class SubtitleTests(unittest.TestCase):
         self.assertIn((1, "error"), levels)
         self.assertIn((2, "error"), levels)
 
+    def test_validate_no_false_overlap_for_unsorted_disjoint_cues(self):
+        # Disjoint cues out of chronological order must not be reported
+        # as overlapping (the old max-end-so-far check did exactly that),
+        # while a genuinely overlapping pair is still caught in either order.
+        disjoint = validate_cues(
+            [Cue(start=10.0, end=12.0, text="later"), Cue(start=0.0, end=2.0, text="earlier")]
+        )
+        self.assertNotIn("overlap", {i["kind"] for i in disjoint})
+        reversed_overlap = validate_cues(
+            [Cue(start=6.0, end=9.0, text="b"), Cue(start=5.0, end=8.0, text="a")]
+        )
+        self.assertIn("overlap", {i["kind"] for i in reversed_overlap})
+
     def test_split_by_duration_with_short_text(self):
         # Duration-driven split must work even when the text is shorter
         # than max_chars (previously it silently produced a single chunk).
