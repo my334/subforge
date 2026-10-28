@@ -13,11 +13,11 @@ from typing import Iterable, List
 
 
 _TIME_RE = re.compile(
-    r"(?P<h>\d{1,2}):(?P<m>\d{2}):(?P<s>\d{2})[,.](?P<ms>\d{3})"
+    r"(?P<h>\d+):(?P<m>\d{2}):(?P<s>\d{2})[,.](?P<ms>\d{3})"
 )
 _TIMING_RE = re.compile(
-    r"(?P<start>\d{1,2}:\d{2}:\d{2}[,.]\d{3})\s+-->\s+"
-    r"(?P<end>\d{1,2}:\d{2}:\d{2}[,.]\d{3})(?:\s+.*)?$"
+    r"(?P<start>\d+:\d{2}:\d{2}[,.]\d{3})\s+-->\s+"
+    r"(?P<end>\d+:\d{2}:\d{2}[,.]\d{3})(?:\s+.*)?$"
 )
 _TAG_RE = re.compile(r"<[^>]+>|\{\\[^}]+\}|\{[^}]+\}")
 

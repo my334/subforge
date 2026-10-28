@@ -140,6 +140,19 @@ class SubtitleTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 parse_timestamp(bad)
 
+    def test_parse_timestamp_accepts_three_digit_hours(self):
+        # format_timestamp already writes 100+ hours for very long videos,
+        # but the parser only accepted 1-2 digit hours, so such a cue was
+        # silently dropped on re-parse instead of round-tripping.
+        self.assertEqual(parse_timestamp("100:00:00,000"), 360000.0)
+        cues = parse_srt("1\n100:00:00,000 --> 100:00:02,500\nLong stream\n")
+        self.assertEqual(len(cues), 1)
+        self.assertEqual(cues[0].start, 360000.0)
+        self.assertEqual(cues[0].end, 360002.5)
+        self.assertEqual(
+            parse_srt(write_srt(cues))[0].start, cues[0].start
+        )
+
     def test_parse_srt_skips_cue_with_out_of_range_timestamp(self):
         text = (
             "1\n00:75:00,000 --> 00:00:05,000\nBad cue\n\n"

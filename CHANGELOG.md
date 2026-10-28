@@ -4,6 +4,10 @@ All notable changes to SubForge are documented here.
 
 ## Unreleased
 
+- **Parsing** fix: timestamps with 100+ hours are now accepted. The writer
+  already produced them for very long videos (e.g. `100:00:00,000`), but
+  the parser's hour field only allowed 1-2 digits, so such a cue was
+  silently dropped on re-parse instead of round-tripping.
 - **`validate`** fix: overlap detection now checks real interval overlap
   against earlier cues instead of "starts before the latest end seen so
   far", so disjoint cues listed out of chronological order (e.g. 10-12s
