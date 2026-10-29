@@ -162,6 +162,20 @@ class SubtitleTests(unittest.TestCase):
         self.assertEqual(len(cues), 1)
         self.assertEqual(cues[0].text, "Good cue")
 
+    def test_parse_vtt_accepts_short_mm_ss_timestamps(self):
+        # WebVTT allows MM:SS.mmm for cues under one hour; such cues used
+        # to be silently dropped because the timing regex required hours.
+        cues = parse_vtt("WEBVTT\n\n00:01.000 --> 00:03.500\nHello short\n")
+        self.assertEqual(len(cues), 1)
+        self.assertEqual(cues[0].start, 1.0)
+        self.assertEqual(cues[0].end, 3.5)
+        self.assertEqual(cues[0].text, "Hello short")
+        self.assertEqual(parse_timestamp("01:02.500"), 62.5)
+        # Short-form cues still round-trip through the (HH:MM:SS) writer.
+        reparsed = parse_vtt(write_vtt(cues))
+        self.assertEqual(reparsed[0].start, 1.0)
+        self.assertEqual(reparsed[0].end, 3.5)
+
     def test_write_ass(self):
         out = write_ass(parse_srt(SAMPLE_SRT))
         self.assertIn("[Events]", out)

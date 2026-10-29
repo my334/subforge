@@ -13,11 +13,11 @@ from typing import Iterable, List
 
 
 _TIME_RE = re.compile(
-    r"(?P<h>\d+):(?P<m>\d{2}):(?P<s>\d{2})[,.](?P<ms>\d{3})"
+    r"(?:(?P<h>\d+):)?(?P<m>\d{2}):(?P<s>\d{2})[,.](?P<ms>\d{3})"
 )
 _TIMING_RE = re.compile(
-    r"(?P<start>\d+:\d{2}:\d{2}[,.]\d{3})\s+-->\s+"
-    r"(?P<end>\d+:\d{2}:\d{2}[,.]\d{3})(?:\s+.*)?$"
+    r"(?P<start>(?:\d+:)?\d{2}:\d{2}[,.]\d{3})\s+-->\s+"
+    r"(?P<end>(?:\d+:)?\d{2}:\d{2}[,.]\d{3})(?:\s+.*)?$"
 )
 _TAG_RE = re.compile(r"<[^>]+>|\{\\[^}]+\}|\{[^}]+\}")
 
@@ -37,12 +37,16 @@ class Cue:
 
 
 def parse_timestamp(value: str) -> float:
-    """Parse HH:MM:SS,mmm or HH:MM:SS.mmm into seconds."""
+    """Parse HH:MM:SS,mmm, HH:MM:SS.mmm, or MM:SS.mmm into seconds.
+
+    The short MM:SS form is valid WebVTT (a cue under one hour need not
+    carry an hours field); without it such cues were silently dropped.
+    """
 
     match = _TIME_RE.fullmatch(value.strip())
     if not match:
         raise ValueError(f"Invalid timestamp: {value!r}")
-    hours = int(match.group("h"))
+    hours = int(match.group("h")) if match.group("h") is not None else 0
     minutes = int(match.group("m"))
     seconds = int(match.group("s"))
     millis = int(match.group("ms"))
