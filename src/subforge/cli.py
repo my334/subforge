@@ -57,7 +57,14 @@ def _write_cues(path: Path, cues: list[Cue]) -> None:
         content = write_ass(cues)
     else:
         raise SystemExit("Output must end in .srt, .vtt, .txt, or .ass")
-    path.write_text(content, encoding="utf-8")
+    try:
+        path.write_text(content, encoding="utf-8")
+    except OSError as exc:
+        # Mirror the clear input-file errors: an unwritable output path
+        # (missing parent directory, a directory, no permission) used to
+        # surface as a raw traceback instead of a usable message.
+        detail = exc.strerror or str(exc)
+        raise SystemExit(f"Error: cannot write output file {path}: {detail}") from None
 
 
 def _require_ffmpeg() -> str:

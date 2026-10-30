@@ -4,7 +4,8 @@ from argparse import Namespace
 from pathlib import Path
 from unittest.mock import patch
 
-from subforge.cli import _read_cues, cmd_info
+from subforge.cli import _read_cues, _write_cues, cmd_info
+from subforge.srt import Cue
 
 
 class CliInputTests(unittest.TestCase):
@@ -19,6 +20,18 @@ class CliInputTests(unittest.TestCase):
         with self.assertRaises(SystemExit) as ctx:
             _read_cues(Path("."))
         self.assertIn("cannot read input file", str(ctx.exception))
+
+    def test_output_to_missing_directory_gives_clear_error(self):
+        # The input side already reports unreadable files clearly, but an
+        # unwritable output path used to surface as a raw traceback.
+        with self.assertRaises(SystemExit) as ctx:
+            _write_cues(
+                Path("no-such-dir/out.srt"),
+                [Cue(start=1.0, end=2.0, text="Hi")],
+            )
+        message = str(ctx.exception)
+        self.assertIn("cannot write output file", message)
+        self.assertIn("no-such-dir/out.srt", message)
 
     def test_info_uses_full_time_span_for_unsorted_cues(self):
         # Cues out of chronological order: the first cue must not be
