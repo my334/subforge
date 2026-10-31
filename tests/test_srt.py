@@ -176,6 +176,19 @@ class SubtitleTests(unittest.TestCase):
         self.assertEqual(reparsed[0].start, 1.0)
         self.assertEqual(reparsed[0].end, 3.5)
 
+    def test_parse_vtt_keeps_cue_with_note_prefixed_identifier(self):
+        # Only "NOTE" + space/tab is a WebVTT comment block; a cue
+        # identifier that merely starts with NOTE must still parse,
+        # while a real NOTE block is still skipped.
+        cues = parse_vtt("WEBVTT\n\nNOTEBOOK\n00:00:01.000 --> 00:00:03.000\nHello\n")
+        self.assertEqual(len(cues), 1)
+        self.assertEqual(cues[0].text, "Hello")
+        commented = parse_vtt(
+            "WEBVTT\n\nNOTE this is a comment\n\n00:00:01.000 --> 00:00:03.000\nHi\n"
+        )
+        self.assertEqual(len(commented), 1)
+        self.assertEqual(commented[0].text, "Hi")
+
     def test_write_ass(self):
         out = write_ass(parse_srt(SAMPLE_SRT))
         self.assertIn("[Events]", out)

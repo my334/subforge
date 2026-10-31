@@ -138,7 +138,11 @@ def parse_vtt(text: str) -> list[Cue]:
 
     cues: list[Cue] = []
     for lines in _parse_blocks(text):
-        if not lines or lines[0].startswith("NOTE"):
+        # Only a block whose first line is "NOTE" (optionally followed by
+        # a space/tab and comment text) is a WebVTT comment; a cue
+        # identifier that merely starts with NOTE, e.g. "NOTEBOOK",
+        # used to be dropped along with its cue.
+        if not lines or lines[0] == "NOTE" or lines[0].startswith(("NOTE ", "NOTE\t")):
             continue
         timing_pos = None
         for i, line in enumerate(lines):
