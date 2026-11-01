@@ -84,6 +84,46 @@ class SubtitleTests(unittest.TestCase):
         for piece in pieces:
             self.assertLessEqual(len(piece.text), 34)  # max_chars + one word
 
+    def test_split_never_exceeds_max_chars(self):
+        # The leftover tail of a split used to survive when it was
+        # longer than max_chars but shorter than twice max_chars (the
+        # old tail loop only split chunks over 2x the ceiling): 17
+        # words at max_chars=42 came out as 39 + 44 chars, and a
+        # duration-driven split left a 49-char tail. No piece may now
+        # exceed max_chars, and the pieces must still tile the span
+        # and preserve the text.
+        cases = [
+            (Cue(start=0.0, end=30.0, text=" ".join(["word"] * 17)), 42, 0),
+            (
+                Cue(
+                    start=0.0,
+                    end=30.0,
+                    text=" ".join(
+                        ["word"] * 16
+                        + ["这是一个长句子没有空格这是一个长句子没有空格"]
+                        + ["word"] * 20
+                    ),
+                ),
+                42,
+                5.0,
+            ),
+        ]
+        for cue, max_chars, max_duration in cases:
+            pieces = split_cues(
+                [cue], max_chars=max_chars, max_duration=max_duration
+            )
+            self.assertGreaterEqual(len(pieces), 2)
+            for piece in pieces:
+                self.assertLessEqual(len(piece.text), max_chars)
+            self.assertEqual(pieces[0].start, cue.start)
+            self.assertEqual(pieces[-1].end, cue.end)
+            for prev, cur in zip(pieces, pieces[1:]):
+                self.assertAlmostEqual(prev.end, cur.start, places=6)
+            self.assertEqual(
+                "".join(p.text for p in pieces).replace(" ", ""),
+                cue.text.replace(" ", ""),
+            )
+
     def test_split_cjk_text_without_spaces(self):
         cue = Cue(start=0.0, end=6.0, text="这是一个没有空格的长句子用来测试中文断句功能是否正常工作")
         pieces = split_cues([cue], max_chars=10, max_duration=0)

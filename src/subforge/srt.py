@@ -289,12 +289,28 @@ def _split_text_chunks(text: str, parts: int, max_chars: int) -> list[str]:
             rest = rest[cut + 1 :].lstrip()
     if rest:
         chunks.append(rest)
-    # A long tail can remain if word boundaries were unfavourable; hard-split it.
+    # A long tail can remain if word boundaries were unfavourable; split it.
+    # When max_chars is a real cap, no piece may exceed it: a
+    # duration-driven split cuts near the (smaller) target size, so the
+    # leftover tail can otherwise end up longer than max_chars. Split
+    # such a tail into roughly even pieces at a word boundary (or a hard
+    # cut for boundary-less text) so no tiny fragment is left behind.
+    # With max_chars disabled, the target size is only a soft aim and the
+    # old 2x tolerance is kept.
     final: list[str] = []
     for chunk in chunks:
-        while len(chunk) > ceiling * 2:
-            final.append(chunk[:ceiling])
-            chunk = chunk[ceiling:]
+        if max_chars > 0:
+            while len(chunk) > max_chars:
+                pieces = -(-len(chunk) // max_chars)
+                cut = chunk.rfind(" ", 0, len(chunk) // pieces + 1)
+                if cut <= 0:
+                    cut = len(chunk) // pieces
+                final.append(chunk[:cut])
+                chunk = chunk[cut:].lstrip()
+        else:
+            while len(chunk) > ceiling * 2:
+                final.append(chunk[:ceiling])
+                chunk = chunk[ceiling:]
         final.append(chunk)
     return [c for c in final if c]
 
