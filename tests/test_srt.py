@@ -193,6 +193,23 @@ class SubtitleTests(unittest.TestCase):
             parse_srt(write_srt(cues))[0].start, cues[0].start
         )
 
+    def test_parse_timestamp_accepts_short_millisecond_fractions(self):
+        # Some exporters write 1-2 digit fractions (",5" = 500 ms);
+        # such cues used to be silently dropped instead of parsed.
+        self.assertEqual(parse_timestamp("00:00:01,5"), 1.5)
+        self.assertEqual(parse_timestamp("00:00:01,25"), 1.25)
+        self.assertEqual(parse_timestamp("00:00:01.250"), 1.25)
+        cues = parse_srt("1\n00:00:01,00 --> 00:00:03,5\nHello\n")
+        self.assertEqual(len(cues), 1)
+        self.assertEqual(cues[0].start, 1.0)
+        self.assertEqual(cues[0].end, 3.5)
+        vtt = parse_vtt("WEBVTT\n\n00:00:01.00 --> 00:00:03.5\nHello\n")
+        self.assertEqual(len(vtt), 1)
+        self.assertEqual(vtt[0].end, 3.5)
+        # 4+ digit fractions are still rejected, not silently misread.
+        with self.assertRaises(ValueError):
+            parse_timestamp("00:00:01,1234")
+
     def test_parse_srt_skips_cue_with_out_of_range_timestamp(self):
         text = (
             "1\n00:75:00,000 --> 00:00:05,000\nBad cue\n\n"
