@@ -1,10 +1,11 @@
 import io
+import tempfile
 import unittest
 from argparse import Namespace
 from pathlib import Path
 from unittest.mock import patch
 
-from subforge.cli import _read_cues, _write_cues, cmd_info
+from subforge.cli import _read_cues, _write_cues, cmd_burn, cmd_info
 from subforge.srt import Cue
 
 
@@ -32,6 +33,48 @@ class CliInputTests(unittest.TestCase):
         message = str(ctx.exception)
         self.assertIn("cannot write output file", message)
         self.assertIn("no-such-dir/out.srt", message)
+
+    def test_burn_missing_subtitle_file_gives_clear_error(self):
+        args = Namespace(
+            input=Path("in.mp4"),
+            subtitles=Path("no-such-subs.srt"),
+            output=Path("out.mp4"),
+        )
+        with patch("subforge.cli._require_ffmpeg", return_value="ffmpeg"):
+            with self.assertRaises(SystemExit) as ctx:
+                cmd_burn(args)
+        self.assertIn("not found", str(ctx.exception))
+        self.assertIn("no-such-subs.srt", str(ctx.exception))
+
+    def test_burn_stages_special_filename_for_ffmpeg(self):
+        # A subtitle path with a quote and a colon used to be handed to
+        # ffmpeg's filter parser verbatim and fail there; burn must instead
+        # stage an identical copy under a safe name and clean it up.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            subtitles = Path(tmpdir) / "it's: tricky.srt"
+            content = "1\n00:00:00,000 --> 00:00:01,000\nHi\n"
+            subtitles.write_text(content)
+            args = Namespace(
+                input=Path("in.mp4"), subtitles=subtitles, output=Path("out.mp4")
+            )
+            seen = {}
+
+            def fake_run(cmd, check):
+                vf = cmd[cmd.index("-vf") + 1]
+                staged = Path(vf[len("subtitles='") : -1])
+                seen["staged"] = staged
+                seen["content"] = staged.read_text()
+                self.assertNotEqual(staged, subtitles)
+                self.assertNotIn("'", staged.name)
+                self.assertNotIn(":", staged.name)
+
+            with (
+                patch("subforge.cli._require_ffmpeg", return_value="ffmpeg"),
+                patch("subforge.cli.subprocess.run", side_effect=fake_run),
+            ):
+                self.assertEqual(cmd_burn(args), 0)
+            self.assertEqual(seen["content"], content)
+            self.assertFalse(seen["staged"].exists())
 
     def test_info_uses_full_time_span_for_unsorted_cues(self):
         # Cues out of chronological order: the first cue must not be

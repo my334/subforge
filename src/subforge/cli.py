@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tempfile
 
 from .srt import (
     Cue,
@@ -188,19 +189,36 @@ def cmd_extract_audio(args: argparse.Namespace) -> int:
 
 def cmd_burn(args: argparse.Namespace) -> int:
     ffmpeg = _require_ffmpeg()
-    subtitle_path = str(args.subtitles).replace("'", "'\\''")
-    cmd = [
-        ffmpeg,
-        "-y",
-        "-i",
-        str(args.input),
-        "-vf",
-        f"subtitles='{subtitle_path}'",
-        "-c:a",
-        "copy",
-        str(args.output),
-    ]
-    subprocess.run(cmd, check=True)
+    subtitles = args.subtitles
+    if not subtitles.is_file():
+        raise SystemExit(f"Error: subtitle file not found: {subtitles}")
+    # Stage the subtitles under a safe temporary name instead of embedding
+    # the user's path in the filter graph: ffmpeg's filter parser mangles
+    # quotes and colons in filenames (a path like "it's: tricky.srt" used
+    # to fail, and no single backslash-escaping recipe covers the quote /
+    # colon / backslash combinations). The staged copy keeps the original
+    # suffix so the subtitles filter still detects the format, and is
+    # removed afterwards whether ffmpeg succeeds or not.
+    with tempfile.NamedTemporaryFile(
+        suffix=subtitles.suffix, prefix="subforge-burn-", delete=False
+    ) as tmp:
+        staged = Path(tmp.name)
+    try:
+        shutil.copyfile(subtitles, staged)
+        cmd = [
+            ffmpeg,
+            "-y",
+            "-i",
+            str(args.input),
+            "-vf",
+            f"subtitles='{staged}'",
+            "-c:a",
+            "copy",
+            str(args.output),
+        ]
+        subprocess.run(cmd, check=True)
+    finally:
+        staged.unlink(missing_ok=True)
     print(f"Burned subtitles -> {args.output}")
     return 0
 
