@@ -175,11 +175,23 @@ def parse_vtt(text: str) -> list[Cue]:
     return cues
 
 
+def _writable_text(text: str) -> str:
+    """Drop blank lines from cue text before writing it out.
+
+    A blank (or whitespace-only) line inside cue text terminates the cue
+    block in both SRT and WebVTT, so writing such a cue out and reading
+    it back silently dropped everything after the blank line. Collapsing
+    blank lines keeps the written file round-tripping losslessly.
+    """
+
+    return "\n".join(line for line in text.strip().splitlines() if line.strip())
+
+
 def write_srt(cues: Iterable[Cue]) -> str:
     blocks = []
     for i, cue in enumerate(cues, start=1):
         blocks.append(
-            f"{i}\n{format_timestamp(cue.start)} --> {format_timestamp(cue.end)}\n{cue.text.strip()}"
+            f"{i}\n{format_timestamp(cue.start)} --> {format_timestamp(cue.end)}\n{_writable_text(cue.text)}"
         )
     return "\n\n".join(blocks) + ("\n" if blocks else "")
 
@@ -188,7 +200,7 @@ def write_vtt(cues: Iterable[Cue]) -> str:
     blocks = ["WEBVTT"]
     for cue in cues:
         blocks.append(
-            f"{format_timestamp(cue.start, vtt=True)} --> {format_timestamp(cue.end, vtt=True)}\n{cue.text.strip()}"
+            f"{format_timestamp(cue.start, vtt=True)} --> {format_timestamp(cue.end, vtt=True)}\n{_writable_text(cue.text)}"
         )
     return "\n\n".join(blocks) + "\n"
 

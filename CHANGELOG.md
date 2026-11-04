@@ -4,6 +4,11 @@ All notable changes to SubForge are documented here.
 
 ## Unreleased
 
+- **Writing** fix: blank lines inside cue text no longer survive into
+  written SRT / WebVTT files. A blank line terminates a cue block, so
+  writing such a cue out and reading it back silently dropped everything
+  after the blank line; writers now collapse blank lines so the file
+  round-trips losslessly.
 - **Parsing** fix: timestamps with 100+ hours are now accepted. The writer
   already produced them for very long videos (e.g. `100:00:00,000`), but
   the parser's hour field only allowed 1-2 digits, so such a cue was

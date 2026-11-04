@@ -246,6 +246,16 @@ class SubtitleTests(unittest.TestCase):
         self.assertEqual(len(commented), 1)
         self.assertEqual(commented[0].text, "Hi")
 
+    def test_write_drops_blank_lines_inside_cue_text(self):
+        # A blank line inside cue text used to terminate the cue block
+        # on re-parse, silently dropping everything after it ("line2"
+        # vanished from both the SRT and the VTT round-trip).
+        cue = Cue(start=1.0, end=2.0, text="line1\n\n   \nline2")
+        for writer, parser in ((write_srt, parse_srt), (write_vtt, parse_vtt)):
+            reparsed = parser(writer([cue]))
+            self.assertEqual(len(reparsed), 1)
+            self.assertEqual(reparsed[0].text, "line1\nline2")
+
     def test_write_ass(self):
         out = write_ass(parse_srt(SAMPLE_SRT))
         self.assertIn("[Events]", out)
