@@ -343,7 +343,9 @@ def split_cues(
     duration exceeds ``max_duration`` seconds (when > 0). A ``max_chars``
     of 0 disables the character rule so the duration rule works on its own.
     The original time span is divided between the pieces in proportion to
-    their text length.
+    their text length. A cue with no usable time span (end <= start) is
+    left untouched: splitting it would manufacture pieces with zero or
+    backwards timings, which ``validate`` would then have to flag.
     """
 
     result: list[Cue] = []
@@ -354,7 +356,7 @@ def split_cues(
             parts = max(parts, -(-flat_len // max_chars))
         if max_duration > 0 and cue.duration > max_duration:
             parts = max(parts, int(cue.duration // max_duration) + 1)
-        if parts <= 1:
+        if parts <= 1 or cue.duration <= 0:
             result.append(cue)
             continue
         chunks = _split_text_chunks(cue.text, parts, max_chars)

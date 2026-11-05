@@ -256,6 +256,17 @@ class SubtitleTests(unittest.TestCase):
             self.assertEqual(len(reparsed), 1)
             self.assertEqual(reparsed[0].text, "line1\nline2")
 
+    def test_split_leaves_non_positive_duration_cue_untouched(self):
+        # Splitting a cue with no usable time span used to manufacture
+        # pieces with zero or backwards timings (e.g. 5.0 -> 4.40 ->
+        # 3.80 -> 3.0 for an end < start cue); such cues are validate /
+        # clean territory, not split's, so they now pass through as-is.
+        long_text = " ".join(["word"] * 20)
+        for start, end in ((5.0, 5.0), (5.0, 3.0)):
+            cue = Cue(start=start, end=end, text=long_text)
+            pieces = split_cues([cue], max_chars=42, max_duration=0)
+            self.assertEqual(pieces, [cue])
+
     def test_write_ass(self):
         out = write_ass(parse_srt(SAMPLE_SRT))
         self.assertIn("[Events]", out)
