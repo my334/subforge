@@ -17,6 +17,21 @@ class CliInputTests(unittest.TestCase):
         self.assertIn("not found", message)
         self.assertIn("no-such-file.srt", message)
 
+    def test_non_utf8_input_gives_clear_error(self):
+        # A GBK-encoded SRT (still common for Chinese subtitles) used to
+        # crash with a raw UnicodeDecodeError traceback instead of a
+        # usable message, like the other unreadable-input cases.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "gbk.srt"
+            path.write_bytes(
+                "1\n00:00:01,000 --> 00:00:03,000\n你好世界\n".encode("gbk")
+            )
+            with self.assertRaises(SystemExit) as ctx:
+                _read_cues(path)
+        message = str(ctx.exception)
+        self.assertIn("not valid UTF-8", message)
+        self.assertIn("gbk.srt", message)
+
     def test_directory_as_input_gives_clear_error(self):
         with self.assertRaises(SystemExit) as ctx:
             _read_cues(Path("."))

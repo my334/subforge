@@ -34,6 +34,14 @@ def _read_cues(path: Path) -> list[Cue]:
         text = path.read_text(encoding="utf-8-sig")
     except FileNotFoundError:
         raise SystemExit(f"Error: input file not found: {path}") from None
+    except UnicodeDecodeError:
+        # A GBK/Windows-1252 encoded subtitle (still common for Chinese
+        # subtitles) used to crash with a raw traceback instead of a
+        # usable message, like the other unreadable-input cases.
+        raise SystemExit(
+            f"Error: input file is not valid UTF-8: {path} "
+            "(convert it to UTF-8 first, e.g. with iconv -f GBK -t UTF-8)"
+        ) from None
     except OSError as exc:
         detail = exc.strerror or str(exc)
         raise SystemExit(f"Error: cannot read input file {path}: {detail}") from None
