@@ -19,7 +19,13 @@ _TIMING_RE = re.compile(
     r"(?P<start>(?:\d+:)?\d{2}:\d{2}[,.]\d{1,3})\s+-->\s+"
     r"(?P<end>(?:\d+:)?\d{2}:\d{2}[,.]\d{1,3})(?:\s+.*)?$"
 )
-_TAG_RE = re.compile(r"<[^>]+>|\{\\[^}]+\}|\{[^}]+\}")
+_TAG_RE = re.compile(r"</?[A-Za-z][^>]*>|\{\\[^}]+\}")
+# Only strip things that are actually tags. The old pattern also ate
+# literal text that merely looked tag-like: "{laughs}" vanished from
+# "He said {laughs} loudly" (a real ASS override always starts with a
+# backslash, e.g. {\an8}), and "5 < 10 > 3" lost its middle because any
+# "<...>" counted as a tag. An HTML tag must start with a letter (after
+# an optional "/"), so bare "<3" and comparisons survive too.
 
 
 @dataclass

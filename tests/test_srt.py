@@ -3,6 +3,7 @@ import unittest
 from subforge.srt import (
     Cue,
     clean_cues,
+    clean_text,
     parse_srt,
     parse_timestamp,
     parse_vtt,
@@ -63,6 +64,28 @@ class SubtitleTests(unittest.TestCase):
         cues = clean_cues(parse_srt(SAMPLE_SRT))
         self.assertEqual(cues[0].text, "Hello world.")
         self.assertGreaterEqual(cues[1].start, cues[0].end)
+
+    def test_clean_keeps_literal_text_that_looks_like_a_tag(self):
+        # clean_text used to delete anything in braces or angle brackets,
+        # so "{laughs}" and the middle of "5 < 10 > 3" silently vanished.
+        # Only real tags go now: an HTML tag (letter after "<") and an
+        # ASS override (backslash after "{"); literal braces, "<3" and
+        # comparisons are dialogue text and must survive.
+        self.assertEqual(
+            clean_text("He said {laughs} loudly"), "He said {laughs} loudly"
+        )
+        self.assertEqual(
+            clean_text("score 5 < 10 > 3 and <i>real tag</i>"),
+            "score 5 < 10 > 3 and real tag",
+        )
+        self.assertEqual(clean_text("Tom <3 Jerry"), "Tom <3 Jerry")
+        self.assertEqual(clean_text(r"{\an8}Hello world"), "Hello world")
+        self.assertEqual(
+            clean_text(r"{\pos(10,20)}Hi {there}"), "Hi {there}"
+        )
+        self.assertEqual(
+            clean_text('<font color="red">Red</font> text'), "Red text"
+        )
 
     def test_scale_cues_for_fps_conversion(self):
         cues = parse_srt(SAMPLE_SRT)
