@@ -87,6 +87,20 @@ class SubtitleTests(unittest.TestCase):
             clean_text('<font color="red">Red</font> text'), "Red text"
         )
 
+    def test_clean_decodes_html_entities(self):
+        # Subtitle exports often write entities where the dialogue
+        # really means the character ("&amp;" for "&"); clean used to
+        # leave them verbatim in the text. Named, numeric and
+        # non-breaking-space entities all decode, and an escaped tag
+        # ("&lt;i&gt;") stays literal text rather than being stripped
+        # as markup, because decoding runs after tag removal.
+        self.assertEqual(clean_text("Tom &amp; Jerry"), "Tom & Jerry")
+        self.assertEqual(clean_text("5 &lt; 10 &gt; 3"), "5 < 10 > 3")
+        self.assertEqual(clean_text("caf&#233;"), "café")
+        self.assertEqual(clean_text("a&nbsp;&nbsp;b"), "a b")
+        self.assertEqual(clean_text("&lt;i&gt;not a tag&lt;/i&gt;"), "<i>not a tag</i>")
+        self.assertEqual(clean_text("&quot;Hi&quot;"), '"Hi"')
+
     def test_scale_cues_for_fps_conversion(self):
         cues = parse_srt(SAMPLE_SRT)
         scaled = scale_cues(cues, 2.0)

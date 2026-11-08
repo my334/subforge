@@ -8,6 +8,7 @@ timings, and clean common caption problems such as HTML tags and overlaps.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+import html
 import re
 from typing import Iterable, List
 
@@ -230,9 +231,17 @@ def shift_cues(cues: Iterable[Cue], offset_seconds: float) -> list[Cue]:
 
 
 def clean_text(text: str) -> str:
-    """Remove HTML/ASS tags and normalize whitespace inside one cue."""
+    """Remove HTML/ASS tags and normalize whitespace inside one cue.
+
+    HTML entities are decoded too: exports often write "&amp;", "&lt;"
+    or "&nbsp;" where the dialogue really means "&", "<" or a space.
+    Decoding happens after the tags are stripped, so an escaped tag in
+    the source ("&lt;i&gt;") stays literal text instead of being
+    removed as if it were markup.
+    """
 
     text = _TAG_RE.sub("", text)
+    text = html.unescape(text)
     lines = [" ".join(line.split()) for line in text.splitlines()]
     return "\n".join(line for line in lines if line).strip()
 
