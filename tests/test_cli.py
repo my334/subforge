@@ -32,6 +32,22 @@ class CliInputTests(unittest.TestCase):
         self.assertIn("not valid UTF-8", message)
         self.assertIn("gbk.srt", message)
 
+    def test_ssa_input_gives_clear_error(self):
+        # .ssa is the older sibling of .ass and just as export-only; it
+        # used to fall through to the SRT parser and silently parse to
+        # zero cues, so a convert would quietly write an empty file.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "subs.ssa"
+            path.write_text(
+                "[Script Info]\nTitle: x\n\n[Events]\n"
+                "Dialogue: 0,0:00:01.00,0:00:03.00,Default,,0,0,0,,Hello\n"
+            )
+            with self.assertRaises(SystemExit) as ctx:
+                _read_cues(path)
+        message = str(ctx.exception)
+        self.assertIn("not supported", message)
+        self.assertIn("SSA", message)
+
     def test_directory_as_input_gives_clear_error(self):
         with self.assertRaises(SystemExit) as ctx:
             _read_cues(Path("."))

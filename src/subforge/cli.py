@@ -28,8 +28,12 @@ from .srt import (
 
 def _read_cues(path: Path) -> list[Cue]:
     suffix = path.suffix.lower()
-    if suffix == ".ass":
-        raise SystemExit("ASS input is not supported yet (ASS is an export-only format for now).")
+    if suffix in {".ass", ".ssa"}:
+        # .ssa is the older sibling of .ass: same family, also export-only
+        # for now. Without this it fell through to the SRT parser and
+        # silently produced zero cues, so a convert would quietly write
+        # an empty output file instead of telling the user.
+        raise SystemExit("ASS/SSA input is not supported yet (ASS/SSA is an export-only format for now).")
     try:
         text = path.read_text(encoding="utf-8-sig")
     except FileNotFoundError:
