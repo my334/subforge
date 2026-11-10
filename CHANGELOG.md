@@ -4,6 +4,12 @@ All notable changes to SubForge are documented here.
 
 ## Unreleased
 
+- **CLI** fix: reading a file that contains no parseable subtitle cues now
+  prints a warning to stderr ("no subtitle cues found in ...") instead of
+  silently writing an empty output file and reporting success ("Converted
+  0 cues"). The exit code and output are unchanged — a genuinely empty
+  subtitle file is still valid — but feeding the wrong file or format is
+  now visible instead of quiet.
 - **Writing** fix: blank lines inside cue text no longer survive into
   written SRT / WebVTT files. A blank line terminates a cue block, so
   writing such a cue out and reading it back silently dropped everything

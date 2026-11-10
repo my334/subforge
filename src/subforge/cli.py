@@ -50,12 +50,29 @@ def _read_cues(path: Path) -> list[Cue]:
         detail = exc.strerror or str(exc)
         raise SystemExit(f"Error: cannot read input file {path}: {detail}") from None
     if suffix == ".vtt":
-        return parse_vtt(text)
-    if suffix == ".srt":
-        return parse_srt(text)
-    # Be forgiving for files shared without a helpful extension.
-    cues = parse_srt(text)
-    return cues if cues else parse_vtt(text)
+        cues = parse_vtt(text)
+    elif suffix == ".srt":
+        cues = parse_srt(text)
+    else:
+        # Be forgiving for files shared without a helpful extension.
+        cues = parse_srt(text)
+        if not cues:
+            cues = parse_vtt(text)
+    if not cues:
+        # A file with no parseable cues used to flow silently into the
+        # writing commands, which then produced an empty output file and
+        # reported success ("Converted 0 cues") — the same quiet failure
+        # the .ssa guard already fixed for ASS input. A warning (not an
+        # error: a genuinely empty subtitle file is valid) tells the
+        # user the input is probably the wrong file or format, without
+        # breaking scripts that handle empty files. It goes to stderr so
+        # --json output on stdout stays machine-readable.
+        print(
+            f"Warning: no subtitle cues found in {path} "
+            "(is this a subtitle file?)",
+            file=sys.stderr,
+        )
+    return cues
 
 
 def _write_cues(path: Path, cues: list[Cue]) -> None:

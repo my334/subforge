@@ -107,6 +107,32 @@ class CliInputTests(unittest.TestCase):
             self.assertEqual(seen["content"], content)
             self.assertFalse(seen["staged"].exists())
 
+    def test_valid_input_does_not_warn(self):
+        buf = io.StringIO()
+        with patch("sys.stderr", buf):
+            cues = _read_cues(Path("examples/sample.srt"))
+        self.assertEqual(len(cues), 3)
+        self.assertEqual(buf.getvalue(), "")
+
+    def test_garbage_input_warns_about_zero_cues(self):
+        # A file with no parseable cues used to flow silently into the
+        # writing commands, which then wrote an empty output file and
+        # reported success ("Converted 0 cues") — the same quiet
+        # failure the .ssa guard already fixed for ASS input. A
+        # warning on stderr flags the likely wrong file/format without
+        # breaking scripts (exit code and output are unchanged).
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "garbage.srt"
+            path.write_text(
+                "This is not a subtitle file.\nJust some random text.\n"
+            )
+            buf = io.StringIO()
+            with patch("sys.stderr", buf):
+                cues = _read_cues(path)
+        self.assertEqual(cues, [])
+        self.assertIn("no subtitle cues found", buf.getvalue())
+        self.assertIn("garbage.srt", buf.getvalue())
+
     def test_info_uses_full_time_span_for_unsorted_cues(self):
         # Cues out of chronological order: the first cue must not be
         # assumed to be the earliest.
