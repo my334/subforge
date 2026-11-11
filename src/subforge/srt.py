@@ -14,11 +14,11 @@ from typing import Iterable, List
 
 
 _TIME_RE = re.compile(
-    r"(?:(?P<h>\d+):)?(?P<m>\d{2}):(?P<s>\d{2})[,.](?P<ms>\d{1,3})"
+    r"(?:(?P<h>\d+):)?(?P<m>\d{2}):(?P<s>\d{2})[,.](?P<ms>\d+)"
 )
 _TIMING_RE = re.compile(
-    r"(?P<start>(?:\d+:)?\d{2}:\d{2}[,.]\d{1,3})\s+-->\s+"
-    r"(?P<end>(?:\d+:)?\d{2}:\d{2}[,.]\d{1,3})(?:\s+.*)?$"
+    r"(?P<start>(?:\d+:)?\d{2}:\d{2}[,.]\d+)\s+-->\s+"
+    r"(?P<end>(?:\d+:)?\d{2}:\d{2}[,.]\d+)(?:\s+.*)?$"
 )
 _TAG_RE = re.compile(r"</?[A-Za-z][^>]*>|\{\\[^}]+\}")
 # Only strip things that are actually tags. The old pattern also ate
@@ -50,7 +50,9 @@ def parse_timestamp(value: str) -> float:
     carry an hours field); without it such cues were silently dropped.
     The millisecond fraction may also have 1-2 digits (",5" means 500 ms,
     ",25" means 250 ms), as some exporters write it that way; such cues
-    used to be silently dropped too.
+    used to be silently dropped too. Fractions longer than 3 digits
+    (microsecond precision, e.g. ".123456" from some exporters) are
+    rounded to the nearest millisecond instead of rejecting the cue.
     """
 
     match = _TIME_RE.fullmatch(value.strip())
@@ -60,7 +62,10 @@ def parse_timestamp(value: str) -> float:
     minutes = int(match.group("m"))
     seconds = int(match.group("s"))
     ms_text = match.group("ms")
-    millis = int(ms_text) * 10 ** (3 - len(ms_text))
+    if len(ms_text) <= 3:
+        millis = int(ms_text) * 10 ** (3 - len(ms_text))
+    else:
+        millis = round(int(ms_text) / 10 ** (len(ms_text) - 3))
     if minutes >= 60 or seconds >= 60:
         # Without this, "00:75:00,000" would silently parse as 4500s.
         raise ValueError(f"Invalid timestamp: {value!r}")

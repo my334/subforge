@@ -243,9 +243,21 @@ class SubtitleTests(unittest.TestCase):
         vtt = parse_vtt("WEBVTT\n\n00:00:01.00 --> 00:00:03.5\nHello\n")
         self.assertEqual(len(vtt), 1)
         self.assertEqual(vtt[0].end, 3.5)
-        # 4+ digit fractions are still rejected, not silently misread.
-        with self.assertRaises(ValueError):
-            parse_timestamp("00:00:01,1234")
+
+    def test_parse_timestamp_accepts_long_millisecond_fractions(self):
+        # Some exporters write microsecond precision (4+ digit fractions);
+        # such cues used to be silently dropped instead of parsed.
+        self.assertEqual(parse_timestamp("00:00:01,1234"), 1.123)
+        self.assertEqual(parse_timestamp("00:00:01.123456"), 1.123)
+        self.assertEqual(parse_timestamp("00:00:01.123500"), 1.124)
+        cues = parse_srt("1\n00:00:01,123456 --> 00:00:03,500000\nHello\n")
+        self.assertEqual(len(cues), 1)
+        self.assertEqual(cues[0].start, 1.123)
+        self.assertEqual(cues[0].end, 3.5)
+        vtt = parse_vtt("WEBVTT\n\n00:00:01.123456 --> 00:00:02.500000\nHello\n")
+        self.assertEqual(len(vtt), 1)
+        self.assertEqual(vtt[0].start, 1.123)
+        self.assertEqual(vtt[0].end, 2.5)
 
     def test_parse_srt_skips_cue_with_out_of_range_timestamp(self):
         text = (
