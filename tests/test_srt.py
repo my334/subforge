@@ -203,6 +203,21 @@ class SubtitleTests(unittest.TestCase):
             " ".join(p.text for p in pieces), " ".join(cue.text.split())
         )
 
+    def test_split_by_duration_exact_multiple_not_over_split(self):
+        # A cue lasting exactly a multiple of max_duration (10s with a
+        # 5s limit) needs exactly 2 pieces, not 3: the old floor+1 count
+        # split it into 3 pieces of ~3.33s each. A 15s cue needs 3.
+        # (Piece durations are proportional to chunk text length, so
+        # only the count and the tiling are asserted here.)
+        for duration, expected in ((10.0, 2), (15.0, 3)):
+            cue = Cue(start=0.0, end=duration, text="word word word word")
+            pieces = split_cues([cue], max_chars=0, max_duration=5.0)
+            self.assertEqual(len(pieces), expected)
+            self.assertEqual(pieces[0].start, 0.0)
+            self.assertEqual(pieces[-1].end, duration)
+            for prev, cur in zip(pieces, pieces[1:]):
+                self.assertAlmostEqual(prev.end, cur.start, places=6)
+
     def test_split_by_duration_with_max_chars_disabled(self):
         cue = Cue(start=0.0, end=11.0, text="这是一个没有空格的长句子用来测试中文断句功能是否正常工作")
         pieces = split_cues([cue], max_chars=0, max_duration=5.0)

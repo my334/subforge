@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 import html
+import math
 import re
 from typing import Iterable, List
 
@@ -375,7 +376,12 @@ def split_cues(
         if max_chars > 0 and flat_len > max_chars:
             parts = max(parts, -(-flat_len // max_chars))
         if max_duration > 0 and cue.duration > max_duration:
-            parts = max(parts, int(cue.duration // max_duration) + 1)
+            # ceil, like the character rule above: a cue lasting exactly
+            # a multiple of max_duration (e.g. 10s with a 5s limit) used
+            # to be split into one piece too many (floor + 1 = 3 for
+            # 10s), even though 2 pieces of exactly 5s each already
+            # satisfy the limit.
+            parts = max(parts, math.ceil(cue.duration / max_duration))
         if parts <= 1 or cue.duration <= 0:
             result.append(cue)
             continue
