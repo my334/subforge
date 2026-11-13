@@ -1,4 +1,5 @@
 import io
+import json
 import tempfile
 import unittest
 from argparse import Namespace
@@ -132,6 +133,30 @@ class CliInputTests(unittest.TestCase):
         self.assertEqual(cues, [])
         self.assertIn("no subtitle cues found", buf.getvalue())
         self.assertIn("garbage.srt", buf.getvalue())
+
+    def test_info_json_on_empty_file_is_still_json(self):
+        # info --json on a file with no cues used to print plain text
+        # ("No cues found"), which broke scripts parsing stdout as
+        # JSON — exactly the empty files --json exists to handle.
+        # The plain-text form is unchanged; only --json emits JSON.
+        args = Namespace(input=Path("x.srt"), json=True)
+        with patch("subforge.cli._read_cues", return_value=[]):
+            buf = io.StringIO()
+            with patch("sys.stdout", buf):
+                self.assertEqual(cmd_info(args), 0)
+        data = json.loads(buf.getvalue())
+        self.assertEqual(data["cues"], 0)
+        self.assertIsNone(data["starts_at"])
+        self.assertIsNone(data["ends_at"])
+        self.assertEqual(data["duration_seconds"], 0.0)
+
+    def test_info_plain_text_on_empty_file_unchanged(self):
+        args = Namespace(input=Path("x.srt"), json=False)
+        with patch("subforge.cli._read_cues", return_value=[]):
+            buf = io.StringIO()
+            with patch("sys.stdout", buf):
+                self.assertEqual(cmd_info(args), 0)
+        self.assertEqual(buf.getvalue().strip(), "No cues found")
 
     def test_info_uses_full_time_span_for_unsorted_cues(self):
         # Cues out of chronological order: the first cue must not be

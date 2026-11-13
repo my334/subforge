@@ -4,6 +4,10 @@ All notable changes to SubForge are documented here.
 
 ## Unreleased
 
+- **`info`** fix: `info --json` on a file with no cues now prints valid
+  JSON (`{"cues": 0, ...}` with null start/end) instead of plain text
+  ("No cues found"), which broke scripts parsing stdout as JSON. The
+  plain-text output is unchanged.
 - **CLI** fix: reading a file that contains no parseable subtitle cues now
   prints a warning to stderr ("no subtitle cues found in ...") instead of
   silently writing an empty output file and reporting success ("Converted

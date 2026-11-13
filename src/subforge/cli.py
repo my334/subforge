@@ -132,7 +132,19 @@ def cmd_clean(args: argparse.Namespace) -> int:
 def cmd_info(args: argparse.Namespace) -> int:
     cues = _read_cues(args.input)
     if not cues:
-        print("No cues found")
+        if args.json:
+            # --json promises machine-readable output: "No cues found"
+            # is not JSON, so a script parsing stdout would break on
+            # exactly the empty files it most needs to handle.
+            print(json.dumps({
+                "cues": 0,
+                "starts_at": None,
+                "ends_at": None,
+                "duration_seconds": 0.0,
+                "average_chars_per_cue": 0.0,
+            }, ensure_ascii=False, indent=2))
+        else:
+            print("No cues found")
         return 0
     total_chars = sum(len(cue.text.replace("\n", "")) for cue in cues)
     # Use the full span, not the first cue: input cues are not guaranteed to
