@@ -4,6 +4,11 @@ All notable changes to SubForge are documented here.
 
 ## Unreleased
 
+- **CLI** fix: a missing `.ass`/`.ssa` input file now reports "input file
+  not found" instead of "ASS/SSA input is not supported yet" — the format
+  guard ran before the file was read, so a mistyped filename looked like a
+  format problem. A real `.ass`/`.ssa` file still reports the format as
+  unsupported, as before.
 - **`info`** fix: `info --json` on a file with no cues now prints valid
   JSON (`{"cues": 0, ...}` with null start/end) instead of plain text
   ("No cues found"), which broke scripts parsing stdout as JSON. The

@@ -33,6 +33,17 @@ class CliInputTests(unittest.TestCase):
         self.assertIn("not valid UTF-8", message)
         self.assertIn("gbk.srt", message)
 
+    def test_missing_ass_input_reports_not_found_not_unsupported(self):
+        # The ASS/SSA guard used to run before the file was read, so a
+        # mistyped .ass filename reported "not supported" instead of
+        # "not found" and looked like a format problem.
+        for name in ("no-such-file.ass", "no-such-file.ssa"):
+            with self.assertRaises(SystemExit) as ctx:
+                _read_cues(Path(name))
+            message = str(ctx.exception)
+            self.assertIn("not found", message)
+            self.assertIn(name, message)
+
     def test_ssa_input_gives_clear_error(self):
         # .ssa is the older sibling of .ass and just as export-only; it
         # used to fall through to the SRT parser and silently parse to
