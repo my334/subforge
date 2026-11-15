@@ -13,6 +13,7 @@ from subforge.srt import (
     validate_cues,
     write_ass,
     write_srt,
+    write_txt,
     write_vtt,
 )
 
@@ -330,6 +331,33 @@ class SubtitleTests(unittest.TestCase):
             cue = Cue(start=start, end=end, text=long_text)
             pieces = split_cues([cue], max_chars=42, max_duration=0)
             self.assertEqual(pieces, [cue])
+
+    def test_clean_rejects_negative_min_duration(self):
+        # A negative minimum used to manufacture an invalid cue: a
+        # zero-duration cue came out with end before start, which
+        # validate then flagged as an error — clean creating broken
+        # cues is the opposite of its job. Zero is still allowed (it
+        # just means "don't enforce a minimum duration").
+        with self.assertRaises(ValueError):
+            clean_cues([Cue(start=5.0, end=5.0, text="Hi")], min_duration=-1)
+        untouched = clean_cues(
+            [Cue(start=5.0, end=5.0, text="Hi")], min_duration=0
+        )
+        self.assertEqual(untouched[0].end, 5.0)
+
+    def test_write_txt(self):
+        # The only writer without a test: multi-line cue text joins
+        # with spaces, empty cues are skipped, and an empty list
+        # writes an empty file (no stray newline).
+        out = write_txt(
+            [
+                Cue(start=1.0, end=2.0, text="Hello\nworld"),
+                Cue(start=3.0, end=4.0, text="  "),
+                Cue(start=5.0, end=6.0, text="Bye"),
+            ]
+        )
+        self.assertEqual(out, "Hello world\nBye\n")
+        self.assertEqual(write_txt([]), "")
 
     def test_write_ass(self):
         out = write_ass(parse_srt(SAMPLE_SRT))

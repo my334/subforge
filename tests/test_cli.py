@@ -6,7 +6,7 @@ from argparse import Namespace
 from pathlib import Path
 from unittest.mock import patch
 
-from subforge.cli import _read_cues, _write_cues, cmd_burn, cmd_info
+from subforge.cli import _read_cues, _write_cues, cmd_burn, cmd_clean, cmd_info
 from subforge.srt import Cue
 
 
@@ -118,6 +118,20 @@ class CliInputTests(unittest.TestCase):
                 self.assertEqual(cmd_burn(args), 0)
             self.assertEqual(seen["content"], content)
             self.assertFalse(seen["staged"].exists())
+
+    def test_clean_negative_min_duration_gives_clear_error(self):
+        # clean --min-duration -1 used to run and write a cue whose end
+        # was before its start; it must fail up front with a usable
+        # message instead of producing a file validate would reject.
+        args = Namespace(
+            input=Path("examples/sample.srt"),
+            output=Path("out.srt"),
+            keep_overlaps=False,
+            min_duration=-1,
+        )
+        with self.assertRaises(SystemExit) as ctx:
+            cmd_clean(args)
+        self.assertIn("min-duration", str(ctx.exception))
 
     def test_valid_input_does_not_warn(self):
         buf = io.StringIO()

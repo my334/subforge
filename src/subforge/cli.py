@@ -122,6 +122,8 @@ def cmd_shift(args: argparse.Namespace) -> int:
 
 
 def cmd_clean(args: argparse.Namespace) -> int:
+    if args.min_duration < 0:
+        raise SystemExit("min-duration must not be negative")
     cues = clean_cues(
         _read_cues(args.input),
         fix_overlaps=not args.keep_overlaps,

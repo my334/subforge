@@ -255,6 +255,12 @@ def clean_text(text: str) -> str:
 def clean_cues(cues: Iterable[Cue], *, fix_overlaps: bool = True, min_duration: float = 0.4) -> list[Cue]:
     """Clean cue text, drop empties, optionally repair overlaps."""
 
+    if min_duration < 0:
+        # A negative minimum would manufacture invalid cues: a
+        # zero-duration cue gets end = start + min_duration, i.e. an
+        # end before its start, which validate then flags as an error.
+        # clean is supposed to repair cues, not create broken ones.
+        raise ValueError("min_duration must not be negative")
     cleaned: list[Cue] = []
     for cue in cues:
         text = clean_text(cue.text)
