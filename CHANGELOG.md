@@ -4,6 +4,13 @@ All notable changes to SubForge are documented here.
 
 ## Unreleased
 
+- **CLI** fix: `extract-audio`, `burn` and `transcribe` now report a
+  missing input video/audio file up front ("input file not found: ...")
+  instead of handing the bad path on: `extract-audio` and `burn` used to
+  dump ffmpeg's full startup banner and end with a cryptic "Command
+  failed with exit code 254", and `transcribe` only failed after the
+  Whisper model had been loaded. Same wording as the subtitle commands
+  already use for a mistyped input path.
 - **CLI** fix: a missing `.ass`/`.ssa` input file now reports "input file
   not found" instead of "ASS/SSA input is not supported yet" — the format
   guard ran before the file was read, so a mistyped filename looked like a

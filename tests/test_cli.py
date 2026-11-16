@@ -6,7 +6,15 @@ from argparse import Namespace
 from pathlib import Path
 from unittest.mock import patch
 
-from subforge.cli import _read_cues, _write_cues, cmd_burn, cmd_clean, cmd_info
+from subforge.cli import (
+    _read_cues,
+    _write_cues,
+    cmd_burn,
+    cmd_clean,
+    cmd_extract_audio,
+    cmd_info,
+    cmd_transcribe,
+)
 from subforge.srt import Cue
 
 
@@ -97,8 +105,10 @@ class CliInputTests(unittest.TestCase):
             subtitles = Path(tmpdir) / "it's: tricky.srt"
             content = "1\n00:00:00,000 --> 00:00:01,000\nHi\n"
             subtitles.write_text(content)
+            video = Path(tmpdir) / "in.mp4"
+            video.write_bytes(b"fake video")
             args = Namespace(
-                input=Path("in.mp4"), subtitles=subtitles, output=Path("out.mp4")
+                input=video, subtitles=subtitles, output=Path("out.mp4")
             )
             seen = {}
 
@@ -118,6 +128,59 @@ class CliInputTests(unittest.TestCase):
                 self.assertEqual(cmd_burn(args), 0)
             self.assertEqual(seen["content"], content)
             self.assertFalse(seen["staged"].exists())
+
+    def test_extract_audio_missing_input_gives_clear_error(self):
+        # A mistyped video path used to be handed straight to ffmpeg,
+        # which dumped its full startup banner and ended with a cryptic
+        # "Command failed with exit code 254". The missing file must be
+        # reported up front, and ffmpeg must never be invoked.
+        args = Namespace(input=Path("no-such-video.mp4"), output=Path("out.wav"))
+        with (
+            patch("subforge.cli._require_ffmpeg", return_value="ffmpeg"),
+            patch("subforge.cli.subprocess.run") as fake_run,
+        ):
+            with self.assertRaises(SystemExit) as ctx:
+                cmd_extract_audio(args)
+        self.assertIn("not found", str(ctx.exception))
+        self.assertIn("no-such-video.mp4", str(ctx.exception))
+        fake_run.assert_not_called()
+
+    def test_burn_missing_input_video_gives_clear_error(self):
+        # Same mistyped-path problem as extract-audio; the subtitle check
+        # already existed, the video check did not. A real subtitle file
+        # is used so the failure is about the video, not the subtitles.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            subtitles = Path(tmpdir) / "subs.srt"
+            subtitles.write_text("1\n00:00:00,000 --> 00:00:01,000\nHi\n")
+            args = Namespace(
+                input=Path("no-such-video.mp4"),
+                subtitles=subtitles,
+                output=Path("out.mp4"),
+            )
+            with (
+                patch("subforge.cli._require_ffmpeg", return_value="ffmpeg"),
+                patch("subforge.cli.subprocess.run") as fake_run,
+            ):
+                with self.assertRaises(SystemExit) as ctx:
+                    cmd_burn(args)
+            self.assertIn("not found", str(ctx.exception))
+            self.assertIn("no-such-video.mp4", str(ctx.exception))
+            fake_run.assert_not_called()
+
+    def test_transcribe_missing_input_gives_clear_error(self):
+        # The input check runs before the faster-whisper import and the
+        # model load, so a typo fails fast instead of after the model
+        # was loaded — and the error is about the file, not the extra.
+        args = Namespace(
+            input=Path("no-such-audio.wav"),
+            output=Path("out.srt"),
+            model="small",
+            language="",
+        )
+        with self.assertRaises(SystemExit) as ctx:
+            cmd_transcribe(args)
+        self.assertIn("not found", str(ctx.exception))
+        self.assertIn("no-such-audio.wav", str(ctx.exception))
 
     def test_clean_negative_min_duration_gives_clear_error(self):
         # clean --min-duration -1 used to run and write a cue whose end

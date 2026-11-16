@@ -214,7 +214,18 @@ def cmd_validate(args: argparse.Namespace) -> int:
     return 0
 
 
+def _require_input_file(path: Path) -> None:
+    # The subtitle commands already report a mistyped input path this way
+    # (see _read_cues); the media commands handed the bad path straight to
+    # ffmpeg / the Whisper model instead, so a typo surfaced as ffmpeg's
+    # full startup banner plus "Command failed with exit code 254" — or,
+    # for transcribe, only after the model had been loaded.
+    if not path.is_file():
+        raise SystemExit(f"Error: input file not found: {path}")
+
+
 def cmd_extract_audio(args: argparse.Namespace) -> int:
+    _require_input_file(args.input)
     ffmpeg = _require_ffmpeg()
     cmd = [
         ffmpeg,
@@ -238,6 +249,7 @@ def cmd_burn(args: argparse.Namespace) -> int:
     subtitles = args.subtitles
     if not subtitles.is_file():
         raise SystemExit(f"Error: subtitle file not found: {subtitles}")
+    _require_input_file(args.input)
     # Stage the subtitles under a safe temporary name instead of embedding
     # the user's path in the filter graph: ffmpeg's filter parser mangles
     # quotes and colons in filenames (a path like "it's: tricky.srt" used
@@ -270,6 +282,7 @@ def cmd_burn(args: argparse.Namespace) -> int:
 
 
 def cmd_transcribe(args: argparse.Namespace) -> int:
+    _require_input_file(args.input)
     try:
         from faster_whisper import WhisperModel
     except ImportError:
