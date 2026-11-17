@@ -13,6 +13,7 @@ from subforge.cli import (
     cmd_clean,
     cmd_extract_audio,
     cmd_info,
+    cmd_split,
     cmd_transcribe,
 )
 from subforge.srt import Cue
@@ -182,8 +183,7 @@ class CliInputTests(unittest.TestCase):
         self.assertIn("not found", str(ctx.exception))
         self.assertIn("no-such-audio.wav", str(ctx.exception))
 
-    def test_clean_negative_min_duration_gives_clear_error(self):
-        # clean --min-duration -1 used to run and write a cue whose end
+    def test_clean_negative_min_duration_gives_clear_error(self):        # clean --min-duration -1 used to run and write a cue whose end
         # was before its start; it must fail up front with a usable
         # message instead of producing a file validate would reject.
         args = Namespace(
@@ -195,6 +195,41 @@ class CliInputTests(unittest.TestCase):
         with self.assertRaises(SystemExit) as ctx:
             cmd_clean(args)
         self.assertIn("min-duration", str(ctx.exception))
+
+    def test_split_negative_limits_give_clear_error(self):
+        # split --max-chars -5 / --max-duration -1 used to be accepted
+        # and silently behave like "disabled" (0 disables a rule, so a
+        # negative limit can only be a typo): the command then split
+        # nothing and still reported success. Like clean and fps, it
+        # must fail up front with a usable message instead.
+        for kwargs in (
+            {"max_chars": -1, "max_duration": 5.0},
+            {"max_chars": 42, "max_duration": -1.0},
+        ):
+            args = Namespace(
+                input=Path("examples/sample.srt"),
+                output=Path("out.srt"),
+                **kwargs,
+            )
+            with self.assertRaises(SystemExit) as ctx:
+                cmd_split(args)
+            message = str(ctx.exception)
+            self.assertIn("must not be negative", message)
+
+    def test_split_zero_limits_still_disable_rules(self):
+        # 0 still means "that rule is off": with both rules off the
+        # file passes through unchanged instead of erroring.
+        args = Namespace(
+            input=Path("examples/sample.srt"),
+            output=Path("out.srt"),
+            max_chars=0,
+            max_duration=0,
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out = Path(tmpdir) / "out.srt"
+            args.output = out
+            self.assertEqual(cmd_split(args), 0)
+            self.assertEqual(len(_read_cues(out)), 3)
 
     def test_valid_input_does_not_warn(self):
         buf = io.StringIO()

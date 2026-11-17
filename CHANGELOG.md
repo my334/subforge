@@ -4,6 +4,12 @@ All notable changes to SubForge are documented here.
 
 ## Unreleased
 
+- **`split`** fix: negative `--max-chars` / `--max-duration` values are
+  now rejected up front ("must not be negative") instead of silently
+  behaving like "disabled" (0 disables a rule, so a negative limit can
+  only be a typo) and splitting nothing while still reporting success.
+  Same up-front validation `clean` and `fps` already do for their
+  limits.
 - **CLI** fix: `extract-audio`, `burn` and `transcribe` now report a
   missing input video/audio file up front ("input file not found: ...")
   instead of handing the bad path on: `extract-audio` and `burn` used to

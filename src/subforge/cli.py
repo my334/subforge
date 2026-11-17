@@ -182,6 +182,12 @@ def cmd_fps(args: argparse.Namespace) -> int:
 
 
 def cmd_split(args: argparse.Namespace) -> int:
+    if args.max_chars < 0 or args.max_duration < 0:
+        # 0 disables a rule, so a negative limit can only be a typo
+        # (e.g. --max-chars -42): without this it silently behaved
+        # like "disabled" and split nothing, the same quiet failure
+        # the other commands already reject up front.
+        raise SystemExit("max-chars and max-duration must not be negative (0 disables that rule)")
     cues = split_cues(
         _read_cues(args.input),
         max_chars=args.max_chars,
