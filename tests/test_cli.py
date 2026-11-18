@@ -12,9 +12,12 @@ from subforge.cli import (
     cmd_burn,
     cmd_clean,
     cmd_extract_audio,
+    cmd_fps,
     cmd_info,
+    cmd_shift,
     cmd_split,
     cmd_transcribe,
+    cmd_validate,
 )
 from subforge.srt import Cue
 
@@ -215,6 +218,83 @@ class CliInputTests(unittest.TestCase):
                 cmd_split(args)
             message = str(ctx.exception)
             self.assertIn("must not be negative", message)
+
+    def test_non_finite_numeric_options_give_clear_error(self):
+        # argparse accepts "nan" and "inf" as floats, and the limit
+        # checks only compare against 0, so such values used to sail
+        # through: --seconds inf crashed in format_timestamp with a
+        # raw OverflowError traceback, --min-duration nan poisoned a
+        # zero-duration cue into a NaN end time, and --max-duration /
+        # --max-cps nan silently disabled the rule. All five float
+        # options must now fail up front with a usable message.
+        cases = [
+            (
+                cmd_shift,
+                Namespace(
+                    input=Path("examples/sample.srt"),
+                    output=Path("out.srt"),
+                    seconds=float("inf"),
+                ),
+            ),
+            (
+                cmd_shift,
+                Namespace(
+                    input=Path("examples/sample.srt"),
+                    output=Path("out.srt"),
+                    seconds=float("nan"),
+                ),
+            ),
+            (
+                cmd_clean,
+                Namespace(
+                    input=Path("examples/sample.srt"),
+                    output=Path("out.srt"),
+                    keep_overlaps=False,
+                    min_duration=float("nan"),
+                ),
+            ),
+            (
+                cmd_fps,
+                Namespace(
+                    input=Path("examples/sample.srt"),
+                    output=Path("out.srt"),
+                    from_fps=float("inf"),
+                    to_fps=25.0,
+                ),
+            ),
+            (
+                cmd_fps,
+                Namespace(
+                    input=Path("examples/sample.srt"),
+                    output=Path("out.srt"),
+                    from_fps=25.0,
+                    to_fps=float("nan"),
+                ),
+            ),
+            (
+                cmd_split,
+                Namespace(
+                    input=Path("examples/sample.srt"),
+                    output=Path("out.srt"),
+                    max_chars=42,
+                    max_duration=float("nan"),
+                ),
+            ),
+            (
+                cmd_validate,
+                Namespace(
+                    input=Path("examples/sample.srt"),
+                    max_chars_per_line=42,
+                    max_cps=float("inf"),
+                    strict=False,
+                    json=False,
+                ),
+            ),
+        ]
+        for func, args in cases:
+            with self.assertRaises(SystemExit) as ctx:
+                func(args)
+            self.assertIn("must be a finite number", str(ctx.exception))
 
     def test_split_zero_limits_still_disable_rules(self):
         # 0 still means "that rule is off": with both rules off the

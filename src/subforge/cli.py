@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 import shutil
 import subprocess
@@ -24,6 +25,19 @@ from .srt import (
     write_txt,
     write_vtt,
 )
+
+
+def _require_finite(value: float, name: str) -> None:
+    # argparse accepts "nan" and "inf" as floats, and the limit checks
+    # below only compare against 0, so a non-finite value sailed through:
+    # --seconds inf crashed later in format_timestamp with a raw
+    # OverflowError traceback, --min-duration nan poisoned a
+    # zero-duration cue into a NaN end time, and --max-duration /
+    # --max-cps nan silently disabled the rule they were meant to set.
+    # Reject them up front with a usable message, like the other
+    # bad-limit checks.
+    if not math.isfinite(value):
+        raise SystemExit(f"{name} must be a finite number")
 
 
 def _read_cues(path: Path) -> list[Cue]:
@@ -115,6 +129,7 @@ def cmd_convert(args: argparse.Namespace) -> int:
 
 
 def cmd_shift(args: argparse.Namespace) -> int:
+    _require_finite(args.seconds, "seconds")
     cues = shift_cues(_read_cues(args.input), args.seconds)
     _write_cues(args.output, cues)
     print(f"Shifted {len(cues)} cues by {args.seconds:+.3f}s -> {args.output}")
@@ -122,6 +137,7 @@ def cmd_shift(args: argparse.Namespace) -> int:
 
 
 def cmd_clean(args: argparse.Namespace) -> int:
+    _require_finite(args.min_duration, "min-duration")
     if args.min_duration < 0:
         raise SystemExit("min-duration must not be negative")
     cues = clean_cues(
@@ -172,6 +188,8 @@ def cmd_info(args: argparse.Namespace) -> int:
 
 
 def cmd_fps(args: argparse.Namespace) -> int:
+    _require_finite(args.from_fps, "from-fps")
+    _require_finite(args.to_fps, "to-fps")
     if args.from_fps <= 0 or args.to_fps <= 0:
         raise SystemExit("Frame rates must be positive numbers")
     factor = args.from_fps / args.to_fps
@@ -182,6 +200,7 @@ def cmd_fps(args: argparse.Namespace) -> int:
 
 
 def cmd_split(args: argparse.Namespace) -> int:
+    _require_finite(args.max_duration, "max-duration")
     if args.max_chars < 0 or args.max_duration < 0:
         # 0 disables a rule, so a negative limit can only be a typo
         # (e.g. --max-chars -42): without this it silently behaved
@@ -199,6 +218,7 @@ def cmd_split(args: argparse.Namespace) -> int:
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
+    _require_finite(args.max_cps, "max-cps")
     cues = _read_cues(args.input)
     issues = validate_cues(
         cues,
