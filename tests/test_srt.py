@@ -177,6 +177,24 @@ class SubtitleTests(unittest.TestCase):
         self.assertIn((1, "error"), levels)
         self.assertIn((2, "error"), levels)
 
+    def test_validate_rejects_nonsense_limits(self):
+        # A zero/negative line or reading-speed limit would flag every
+        # cue (e.g. max_cps=-5 reported a 3.7 chars/s cue as too fast),
+        # and a non-positive max_duration every cue as too long; like
+        # clean_cues and scale_cues, validate_cues must fail up front
+        # instead of reporting garbage issues.
+        cue = [Cue(start=0.0, end=3.0, text="Hello world")]
+        for kwargs in (
+            {"max_chars_per_line": 0},
+            {"max_chars_per_line": -1},
+            {"max_cps": 0},
+            {"max_cps": -5.0},
+            {"min_duration": -0.1},
+            {"max_duration": 0},
+        ):
+            with self.assertRaises(ValueError):
+                validate_cues(cue, **kwargs)
+
     def test_validate_no_false_overlap_for_unsorted_disjoint_cues(self):
         # Disjoint cues out of chronological order must not be reported
         # as overlapping (the old max-end-so-far check did exactly that),

@@ -219,6 +219,25 @@ class CliInputTests(unittest.TestCase):
             message = str(ctx.exception)
             self.assertIn("must not be negative", message)
 
+    def test_validate_non_positive_limits_give_clear_error(self):
+        # validate --max-cps -5 / --max-chars-per-line 0 used to be
+        # accepted and then flag every cue (a 3.7 chars/s cue was
+        # reported as too fast at a -5 limit): like clean and split,
+        # it must fail up front with a usable message instead.
+        for kwargs in (
+            {"max_chars_per_line": 0, "max_cps": 21.0},
+            {"max_chars_per_line": 42, "max_cps": -5.0},
+        ):
+            args = Namespace(
+                input=Path("examples/sample.srt"),
+                strict=False,
+                json=False,
+                **kwargs,
+            )
+            with self.assertRaises(SystemExit) as ctx:
+                cmd_validate(args)
+            self.assertIn("must be positive", str(ctx.exception))
+
     def test_non_finite_numeric_options_give_clear_error(self):
         # argparse accepts "nan" and "inf" as floats, and the limit
         # checks only compare against 0, so such values used to sail

@@ -422,6 +422,19 @@ def validate_cues(
     ("error" or "warning"), ``kind`` and ``message``.
     """
 
+    if max_chars_per_line <= 0:
+        # A zero or negative line limit would flag every line, and a
+        # zero or negative reading-speed limit every cue — the same
+        # nonsense-limit class the other commands already reject up
+        # front, so fail here instead of reporting garbage issues.
+        raise ValueError("max_chars_per_line must be positive")
+    if max_cps <= 0:
+        raise ValueError("max_cps must be positive")
+    if min_duration < 0:
+        raise ValueError("min_duration must not be negative")
+    if max_duration <= 0:
+        raise ValueError("max_duration must be positive")
+
     issues: list[dict] = []
     previous: list[Cue] = []
     for pos, cue in enumerate(cues, start=1):

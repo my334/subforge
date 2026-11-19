@@ -219,6 +219,14 @@ def cmd_split(args: argparse.Namespace) -> int:
 
 def cmd_validate(args: argparse.Namespace) -> int:
     _require_finite(args.max_cps, "max-cps")
+    if args.max_chars_per_line <= 0:
+        # A zero or negative limit would flag every line / every cue
+        # (a --max-cps of -5 reported a 3.7 chars/s cue as too fast),
+        # the same nonsense-limit class clean and split already reject
+        # up front instead of reporting success on garbage.
+        raise SystemExit("max-chars-per-line must be positive")
+    if args.max_cps <= 0:
+        raise SystemExit("max-cps must be positive")
     cues = _read_cues(args.input)
     issues = validate_cues(
         cues,
