@@ -195,6 +195,31 @@ class SubtitleTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 validate_cues(cue, **kwargs)
 
+    def test_core_functions_reject_non_finite_numbers(self):
+        # The CLI already rejects nan/inf options up front, but the
+        # library functions did not: scale/shift with NaN produced NaN
+        # timings that only crashed later in format_timestamp with a
+        # raw error (inf with an OverflowError), while a NaN limit
+        # silently disabled the rule it was meant to set — a 20s cue
+        # was not split, a 100 chars/s cue was not flagged, and a
+        # zero-duration cue got a NaN end from clean. Fail up front.
+        cue = [Cue(start=1.0, end=3.0, text="Hello world")]
+        for bad in (float("nan"), float("inf"), float("-inf")):
+            with self.assertRaises(ValueError):
+                scale_cues(cue, bad)
+            with self.assertRaises(ValueError):
+                shift_cues(cue, bad)
+            with self.assertRaises(ValueError):
+                split_cues(cue, max_chars=0, max_duration=bad)
+            with self.assertRaises(ValueError):
+                clean_cues(cue, min_duration=bad)
+            with self.assertRaises(ValueError):
+                validate_cues(cue, max_cps=bad)
+            with self.assertRaises(ValueError):
+                validate_cues(cue, min_duration=bad)
+            with self.assertRaises(ValueError):
+                validate_cues(cue, max_duration=bad)
+
     def test_validate_no_false_overlap_for_unsorted_disjoint_cues(self):
         # Disjoint cues out of chronological order must not be reported
         # as overlapping (the old max-end-so-far check did exactly that),

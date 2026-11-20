@@ -226,6 +226,13 @@ def write_txt(cues: Iterable[Cue]) -> str:
 def shift_cues(cues: Iterable[Cue], offset_seconds: float) -> list[Cue]:
     """Return cues shifted by offset_seconds; cues ending before 0 are dropped."""
 
+    if not math.isfinite(offset_seconds):
+        # NaN/inf sailed through (every comparison is False for NaN) and
+        # produced NaN timings, which only crashed later in
+        # format_timestamp with a raw "cannot convert float NaN to
+        # integer" — the same non-finite class the CLI already rejects
+        # up front for --seconds. Fail here instead.
+        raise ValueError("offset_seconds must be a finite number")
     shifted: list[Cue] = []
     for cue in cues:
         start = cue.start + offset_seconds
@@ -255,6 +262,11 @@ def clean_text(text: str) -> str:
 def clean_cues(cues: Iterable[Cue], *, fix_overlaps: bool = True, min_duration: float = 0.4) -> list[Cue]:
     """Clean cue text, drop empties, optionally repair overlaps."""
 
+    if not math.isfinite(min_duration):
+        # NaN sailed past the < 0 check and poisoned a zero-duration
+        # cue into a NaN end time (end = start + min_duration), the
+        # same non-finite class the CLI already rejects up front.
+        raise ValueError("min_duration must be a finite number")
     if min_duration < 0:
         # A negative minimum would manufacture invalid cues: a
         # zero-duration cue gets end = start + min_duration, i.e. an
@@ -288,6 +300,12 @@ def scale_cues(cues: Iterable[Cue], factor: float) -> list[Cue]:
     ``from_fps`` is retimed for ``to_fps`` with ``factor = from_fps / to_fps``.
     """
 
+    if not math.isfinite(factor):
+        # NaN passed the <= 0 check (the comparison is False) and
+        # produced NaN timings that only crashed later in
+        # format_timestamp; inf crashed there with a raw OverflowError.
+        # Same non-finite class the CLI already rejects up front.
+        raise ValueError("factor must be a finite number")
     if factor <= 0:
         raise ValueError("factor must be positive")
     return [replace(cue, start=cue.start * factor, end=cue.end * factor) for cue in cues]
@@ -375,6 +393,11 @@ def split_cues(
     backwards timings, which ``validate`` would then have to flag.
     """
 
+    if not math.isfinite(max_duration):
+        # NaN failed the > 0 check and silently disabled the duration
+        # rule (a 20s cue came out unsplit) — the same non-finite class
+        # the CLI already rejects up front for --max-duration.
+        raise ValueError("max_duration must be a finite number")
     result: list[Cue] = []
     for cue in cues:
         flat_len = len(" ".join(cue.text.split()))
@@ -428,10 +451,19 @@ def validate_cues(
         # nonsense-limit class the other commands already reject up
         # front, so fail here instead of reporting garbage issues.
         raise ValueError("max_chars_per_line must be positive")
+    if not math.isfinite(max_cps):
+        # NaN failed the <= 0 check and silently disabled the
+        # reading-speed rule (a 100 chars/s cue was not flagged) — the
+        # same non-finite class the CLI already rejects up front.
+        raise ValueError("max_cps must be a finite number")
     if max_cps <= 0:
         raise ValueError("max_cps must be positive")
+    if not math.isfinite(min_duration):
+        raise ValueError("min_duration must be a finite number")
     if min_duration < 0:
         raise ValueError("min_duration must not be negative")
+    if not math.isfinite(max_duration):
+        raise ValueError("max_duration must be a finite number")
     if max_duration <= 0:
         raise ValueError("max_duration must be positive")
 
