@@ -4,6 +4,7 @@ from subforge.srt import (
     Cue,
     clean_cues,
     clean_text,
+    format_timestamp,
     parse_srt,
     parse_timestamp,
     parse_vtt,
@@ -401,6 +402,25 @@ class SubtitleTests(unittest.TestCase):
         )
         self.assertEqual(out, "Hello world\nBye\n")
         self.assertEqual(write_txt([]), "")
+
+    def test_format_timestamp_rejects_non_finite_seconds(self):
+        # The core functions reject non-finite numbers up front, but a
+        # Cue can still carry one (built directly, or produced by
+        # arithmetic): NaN crashed the writers with a raw "cannot
+        # convert float NaN to integer", inf with an OverflowError, and
+        # -inf was silently clamped to 00:00:00,000. The formatters must
+        # fail with a usable message instead, so every writer does too.
+        for bad in (float("nan"), float("inf"), float("-inf")):
+            with self.assertRaises(ValueError):
+                format_timestamp(bad)
+            with self.assertRaises(ValueError):
+                write_srt([Cue(start=bad, end=1.0, text="Hi")])
+            with self.assertRaises(ValueError):
+                write_vtt([Cue(start=1.0, end=bad, text="Hi")])
+            with self.assertRaises(ValueError):
+                write_ass([Cue(start=bad, end=1.0, text="Hi")])
+        self.assertEqual(format_timestamp(1.5), "00:00:01,500")
+        self.assertEqual(format_timestamp(-1.0), "00:00:00,000")
 
     def test_write_ass(self):
         out = write_ass(parse_srt(SAMPLE_SRT))

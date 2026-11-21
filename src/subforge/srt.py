@@ -76,6 +76,14 @@ def parse_timestamp(value: str) -> float:
 def format_timestamp(seconds: float, *, vtt: bool = False) -> str:
     """Format seconds as HH:MM:SS,mmm (SRT) or HH:MM:SS.mmm (VTT)."""
 
+    if not math.isfinite(seconds):
+        # The core functions now reject non-finite numbers up front, but
+        # a Cue can still carry one (built directly, or produced by
+        # arithmetic on parsed timings): NaN crashed here with a raw
+        # "cannot convert float NaN to integer", inf with an
+        # OverflowError, and -inf was silently clamped to 0. Fail with
+        # a usable message instead, like the other non-finite checks.
+        raise ValueError("seconds must be a finite number")
     if seconds < 0:
         seconds = 0.0
     total_ms = int(round(seconds * 1000))
@@ -505,6 +513,11 @@ def validate_cues(
 
 
 def _format_ass_timestamp(seconds: float) -> str:
+    if not math.isfinite(seconds):
+        # Same non-finite hole as format_timestamp: a NaN cue timing
+        # crashed here with a raw "cannot convert float NaN to integer"
+        # instead of a usable message.
+        raise ValueError("seconds must be a finite number")
     if seconds < 0:
         seconds = 0.0
     total_cs = int(round(seconds * 100))
