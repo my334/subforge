@@ -418,7 +418,14 @@ def split_cues(
             # to be split into one piece too many (floor + 1 = 3 for
             # 10s), even though 2 pieces of exactly 5s each already
             # satisfy the limit.
-            parts = max(parts, math.ceil(cue.duration / max_duration))
+            ratio = cue.duration / max_duration
+            if not math.isfinite(ratio):
+                # A max_duration so tiny that the piece count overflows
+                # a float (e.g. 1e-308 on a 10s cue) used to crash
+                # math.ceil with a raw OverflowError; fail with a usable
+                # message instead, like the other bad-limit checks.
+                raise ValueError("max_duration is too small to split a cue of this duration")
+            parts = max(parts, math.ceil(ratio))
         if parts <= 1 or cue.duration <= 0:
             result.append(cue)
             continue

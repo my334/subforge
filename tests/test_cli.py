@@ -315,6 +315,35 @@ class CliInputTests(unittest.TestCase):
                 func(args)
             self.assertIn("must be a finite number", str(ctx.exception))
 
+    def test_fps_extreme_rates_give_clear_error(self):
+        # Two finite frame rates can still overflow their ratio
+        # (1e308 / 1e-308 -> inf) or underflow it to zero (1e-308 /
+        # 1e308); scale_cues then raised a raw ValueError traceback
+        # instead of a usable message.
+        for from_fps, to_fps in ((1e308, 1e-308), (1e-308, 1e308)):
+            args = Namespace(
+                input=Path("examples/sample.srt"),
+                output=Path("out.srt"),
+                from_fps=from_fps,
+                to_fps=to_fps,
+            )
+            with self.assertRaises(SystemExit) as ctx:
+                cmd_fps(args)
+            self.assertIn("retiming factor", str(ctx.exception))
+
+    def test_split_tiny_max_duration_gives_clear_error(self):
+        # --max-duration 1e-308 on a multi-second cue overflowed the
+        # piece count and crashed with a raw OverflowError traceback.
+        args = Namespace(
+            input=Path("examples/sample.srt"),
+            output=Path("out.srt"),
+            max_chars=42,
+            max_duration=1e-308,
+        )
+        with self.assertRaises(SystemExit) as ctx:
+            cmd_split(args)
+        self.assertIn("too small", str(ctx.exception))
+
     def test_split_zero_limits_still_disable_rules(self):
         # 0 still means "that rule is off": with both rules off the
         # file passes through unchanged instead of erroring.

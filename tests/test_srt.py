@@ -365,6 +365,15 @@ class SubtitleTests(unittest.TestCase):
             self.assertEqual(len(reparsed), 1)
             self.assertEqual(reparsed[0].text, "line1\nline2")
 
+    def test_split_rejects_max_duration_too_small_to_count_pieces(self):
+        # A max_duration so tiny that the piece count overflows a float
+        # (10s / 1e-308) used to crash math.ceil with a raw
+        # OverflowError; like the other bad limits, split must fail
+        # with a usable message instead.
+        cue = Cue(start=0.0, end=10.0, text="word word word word")
+        with self.assertRaises(ValueError):
+            split_cues([cue], max_chars=0, max_duration=1e-308)
+
     def test_split_leaves_non_positive_duration_cue_untouched(self):
         # Splitting a cue with no usable time span used to manufacture
         # pieces with zero or backwards timings (e.g. 5.0 -> 4.40 ->

@@ -193,6 +193,13 @@ def cmd_fps(args: argparse.Namespace) -> int:
     if args.from_fps <= 0 or args.to_fps <= 0:
         raise SystemExit("Frame rates must be positive numbers")
     factor = args.from_fps / args.to_fps
+    if not math.isfinite(factor) or factor <= 0:
+        # Two finite frame rates can still overflow their ratio
+        # (1e308 / 1e-308 -> inf) or underflow it to zero (1e-308 /
+        # 1e308); either way scale_cues raised a raw ValueError
+        # traceback instead of a usable message, like the other
+        # bad-limit checks already reject up front.
+        raise SystemExit("frame rates produce a retiming factor that is not finite and positive")
     cues = scale_cues(_read_cues(args.input), factor)
     _write_cues(args.output, cues)
     print(f"Retimed {len(cues)} cues from {args.from_fps} fps to {args.to_fps} fps (x{factor:.6f}) -> {args.output}")
@@ -207,11 +214,18 @@ def cmd_split(args: argparse.Namespace) -> int:
         # like "disabled" and split nothing, the same quiet failure
         # the other commands already reject up front.
         raise SystemExit("max-chars and max-duration must not be negative (0 disables that rule)")
-    cues = split_cues(
-        _read_cues(args.input),
-        max_chars=args.max_chars,
-        max_duration=args.max_duration,
-    )
+    try:
+        cues = split_cues(
+            _read_cues(args.input),
+            max_chars=args.max_chars,
+            max_duration=args.max_duration,
+        )
+    except ValueError as exc:
+        # split_cues rejects a max_duration too small to split a cue of
+        # this length (the piece count overflows a float); surface that
+        # as a clean CLI error instead of a raw traceback, like the
+        # other bad-limit checks.
+        raise SystemExit(str(exc)) from None
     _write_cues(args.output, cues)
     print(f"Split into {len(cues)} cues -> {args.output}")
     return 0
