@@ -233,6 +233,8 @@ def cmd_split(args: argparse.Namespace) -> int:
 
 def cmd_validate(args: argparse.Namespace) -> int:
     _require_finite(args.max_cps, "max-cps")
+    _require_finite(args.min_duration, "min-duration")
+    _require_finite(args.max_duration, "max-duration")
     if args.max_chars_per_line <= 0:
         # A zero or negative limit would flag every line / every cue
         # (a --max-cps of -5 reported a 3.7 chars/s cue as too fast),
@@ -241,11 +243,17 @@ def cmd_validate(args: argparse.Namespace) -> int:
         raise SystemExit("max-chars-per-line must be positive")
     if args.max_cps <= 0:
         raise SystemExit("max-cps must be positive")
+    if args.min_duration < 0:
+        raise SystemExit("min-duration must not be negative")
+    if args.max_duration <= 0:
+        raise SystemExit("max-duration must be positive")
     cues = _read_cues(args.input)
     issues = validate_cues(
         cues,
         max_chars_per_line=args.max_chars_per_line,
         max_cps=args.max_cps,
+        min_duration=args.min_duration,
+        max_duration=args.max_duration,
     )
     if args.json:
         print(json.dumps({"cues": len(cues), "issues": issues}, ensure_ascii=False, indent=2))
@@ -297,6 +305,17 @@ def cmd_burn(args: argparse.Namespace) -> int:
     subtitles = args.subtitles
     if not subtitles.is_file():
         raise SystemExit(f"Error: subtitle file not found: {subtitles}")
+    if subtitles.suffix.lower() not in {".srt", ".vtt", ".ass", ".ssa"}:
+        # ffmpeg's subtitles filter (libass) cannot read a plain-text or
+        # otherwise unsupported subtitle file: without this it failed
+        # inside ffmpeg with the full startup banner and a cryptic
+        # "Command failed with exit code 183" instead of a usable
+        # message — the same class of quiet failure the missing-file
+        # checks already fix for burn's other inputs.
+        raise SystemExit(
+            "Error: burn needs a subtitle file ffmpeg can read "
+            f"(.srt, .vtt, .ass, or .ssa), not {subtitles}"
+        )
     _require_input_file(args.input)
     # Stage the subtitles under a safe temporary name instead of embedding
     # the user's path in the filter graph: ffmpeg's filter parser mangles
@@ -400,6 +419,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("input", type=Path)
     p.add_argument("--max-chars-per-line", type=int, default=42)
     p.add_argument("--max-cps", type=float, default=21.0, help="Max reading speed in chars/second")
+    p.add_argument("--min-duration", type=float, default=0.3, help="Seconds; cues shorter than this are flagged too short")
+    p.add_argument("--max-duration", type=float, default=7.0, help="Seconds; cues longer than this are flagged too long")
     p.add_argument("--strict", action="store_true", help="Exit non-zero on warnings too")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_validate)

@@ -101,6 +101,36 @@ class CliInputTests(unittest.TestCase):
         self.assertIn("not found", str(ctx.exception))
         self.assertIn("no-such-subs.srt", str(ctx.exception))
 
+    def test_burn_unsupported_subtitle_format_gives_clear_error(self):
+        # ffmpeg's subtitles filter (libass) cannot read a plain-text
+        # file: a .txt subtitle used to be handed straight to ffmpeg,
+        # which dumped its full startup banner and ended with a cryptic
+        # "Command failed with exit code 183". The format must be
+        # rejected up front, and ffmpeg must never be invoked. A
+        # subtitle file with no extension is the same failure.
+        for name, content in (
+            ("subs.txt", "Hello world\nSecond line\n"),
+            ("subs", "Hello world\n"),
+        ):
+            with tempfile.TemporaryDirectory() as tmpdir:
+                subtitles = Path(tmpdir) / name
+                subtitles.write_text(content)
+                args = Namespace(
+                    input=Path("in.mp4"),
+                    subtitles=subtitles,
+                    output=Path("out.mp4"),
+                )
+                with (
+                    patch("subforge.cli._require_ffmpeg", return_value="ffmpeg"),
+                    patch("subforge.cli.subprocess.run") as fake_run,
+                ):
+                    with self.assertRaises(SystemExit) as ctx:
+                        cmd_burn(args)
+                message = str(ctx.exception)
+                self.assertIn("burn needs a subtitle file", message)
+                self.assertIn(name, message)
+                fake_run.assert_not_called()
+
     def test_burn_stages_special_filename_for_ffmpeg(self):
         # A subtitle path with a quote and a colon used to be handed to
         # ffmpeg's filter parser verbatim and fail there; burn must instead
@@ -232,11 +262,64 @@ class CliInputTests(unittest.TestCase):
                 input=Path("examples/sample.srt"),
                 strict=False,
                 json=False,
+                min_duration=0.3,
+                max_duration=7.0,
                 **kwargs,
             )
             with self.assertRaises(SystemExit) as ctx:
                 cmd_validate(args)
             self.assertIn("must be positive", str(ctx.exception))
+
+    def test_validate_duration_limits_are_tunable(self):
+        # validate_cues already accepted min/max duration, but the CLI
+        # only exposed --max-chars-per-line and --max-cps, so the
+        # duration thresholds were stuck at their defaults (0.3s / 7s)
+        # and a user could not tune them. A 0.2s cue is too short at
+        # the default but fine with --min-duration 0.1; an 8s cue is
+        # too long at the default but fine with --max-duration 10.
+        cues = [Cue(start=0.0, end=0.2, text="Hi"), Cue(start=1.0, end=9.0, text="Hello world")]
+        for min_duration, max_duration, expect_ok in (
+            (0.3, 7.0, False),
+            (0.1, 10.0, True),
+        ):
+            args = Namespace(
+                input=Path("x.srt"),
+                max_chars_per_line=42,
+                max_cps=21.0,
+                min_duration=min_duration,
+                max_duration=max_duration,
+                strict=False,
+                json=False,
+            )
+            with patch("subforge.cli._read_cues", return_value=cues):
+                buf = io.StringIO()
+                with patch("sys.stdout", buf):
+                    self.assertEqual(cmd_validate(args), 0)
+            self.assertEqual("no issues found" in buf.getvalue(), expect_ok)
+
+    def test_validate_bad_duration_limits_give_clear_error(self):
+        # The new --min-duration / --max-duration options get the same
+        # up-front treatment as the other numeric limits: a negative
+        # minimum, a zero maximum, or a non-finite value must fail with
+        # a usable message instead of reaching validate_cues (or
+        # silently disabling the rule, as nan would).
+        for kwargs, fragment in (
+            ({"min_duration": -1.0, "max_duration": 7.0}, "must not be negative"),
+            ({"min_duration": 0.3, "max_duration": 0.0}, "must be positive"),
+            ({"min_duration": float("nan"), "max_duration": 7.0}, "must be a finite number"),
+            ({"min_duration": 0.3, "max_duration": float("inf")}, "must be a finite number"),
+        ):
+            args = Namespace(
+                input=Path("examples/sample.srt"),
+                max_chars_per_line=42,
+                max_cps=21.0,
+                strict=False,
+                json=False,
+                **kwargs,
+            )
+            with self.assertRaises(SystemExit) as ctx:
+                cmd_validate(args)
+            self.assertIn(fragment, str(ctx.exception))
 
     def test_non_finite_numeric_options_give_clear_error(self):
         # argparse accepts "nan" and "inf" as floats, and the limit
@@ -305,6 +388,8 @@ class CliInputTests(unittest.TestCase):
                     input=Path("examples/sample.srt"),
                     max_chars_per_line=42,
                     max_cps=float("inf"),
+                    min_duration=0.3,
+                    max_duration=7.0,
                     strict=False,
                     json=False,
                 ),

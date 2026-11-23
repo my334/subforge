@@ -4,6 +4,18 @@ All notable changes to SubForge are documented here.
 
 ## Unreleased
 
+- **`burn`** fix: a subtitle file ffmpeg's subtitles filter cannot read
+  (e.g. `.txt`, or no extension at all) is now rejected up front
+  (\"burn needs a subtitle file ffmpeg can read (.srt, .vtt, .ass, or
+  .ssa)\") instead of failing inside ffmpeg with its full startup banner
+  and a cryptic \"Command failed with exit code 183\". Same up-front
+  treatment burn already gives a missing subtitle file.
+- **`validate`** now exposes `--min-duration` (default 0.3s) and
+  `--max-duration` (default 7.0s): the duration thresholds were already
+  tunable in the library (`validate_cues`) but stuck at their defaults
+  from the CLI. Bad values get the same up-front checks as the other
+  numeric limits (negative / zero / non-finite rejected with a usable
+  message).
 - **`split`** fix: negative `--max-chars` / `--max-duration` values are
   now rejected up front ("must not be negative") instead of silently
   behaving like "disabled" (0 disables a rule, so a negative limit can
