@@ -385,6 +385,24 @@ class SubtitleTests(unittest.TestCase):
             pieces = split_cues([cue], max_chars=42, max_duration=0)
             self.assertEqual(pieces, [cue])
 
+    def test_split_rejects_negative_limits(self):
+        # A negative limit used to silently disable its rule (a long
+        # cue came out unsplit, exactly like max_chars=0 / max_duration=0),
+        # so a typo such as --max-chars -42 vanished without a word.
+        # 0 already means "disabled", so a negative value can only be a
+        # mistake — the same nonsense-limit class the CLI, validate_cues
+        # and clean_cues already reject up front. Zero stays allowed.
+        cue = [Cue(start=0.0, end=10.0, text=" ".join(["word"] * 20))]
+        for kwargs in (
+            {"max_chars": -1, "max_duration": 0},
+            {"max_chars": -42, "max_duration": 5.0},
+            {"max_chars": 42, "max_duration": -5.0},
+            {"max_chars": 0, "max_duration": -1.0},
+        ):
+            with self.assertRaises(ValueError):
+                split_cues(cue, **kwargs)
+        self.assertEqual(len(split_cues(cue, max_chars=0, max_duration=0)), 1)
+
     def test_clean_rejects_negative_min_duration(self):
         # A negative minimum used to manufacture an invalid cue: a
         # zero-duration cue came out with end before start, which

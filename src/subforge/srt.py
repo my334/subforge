@@ -399,13 +399,21 @@ def split_cues(
     their text length. A cue with no usable time span (end <= start) is
     left untouched: splitting it would manufacture pieces with zero or
     backwards timings, which ``validate`` would then have to flag.
+    A negative limit is rejected: 0 disables a rule, so a negative value
+    can only be a typo, and silently disabling the rule (the old
+    behaviour) hid it — the same nonsense-limit class the CLI and the
+    other core functions already reject up front.
     """
 
+    if max_chars < 0:
+        raise ValueError("max_chars must not be negative (0 disables the character rule)")
     if not math.isfinite(max_duration):
         # NaN failed the > 0 check and silently disabled the duration
         # rule (a 20s cue came out unsplit) — the same non-finite class
         # the CLI already rejects up front for --max-duration.
         raise ValueError("max_duration must be a finite number")
+    if max_duration < 0:
+        raise ValueError("max_duration must not be negative (0 disables the duration rule)")
     result: list[Cue] = []
     for cue in cues:
         flat_len = len(" ".join(cue.text.split()))
