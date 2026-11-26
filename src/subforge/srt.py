@@ -558,12 +558,41 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
 
 
+def _escape_ass_text(text: str) -> str:
+    """Escape dialogue text so libass renders it literally.
+
+    In ASS, ``{...}`` is an override block and ``\\N`` / ``\\n`` /
+    ``\\h`` are control codes, so dialogue that merely contains them
+    was silently reinterpreted when burned: "{laughs}" vanished from
+    the picture and "C:\\New" split into two lines (both verified by
+    rendering the exported file with ffmpeg's subtitles filter). A
+    backslash before a brace makes libass print the brace, and a
+    zero-width space between a backslash and N/n/h breaks the control
+    code while rendering invisibly, so the backslash and the letter
+    both survive. A backslash before any other character already
+    renders literally and is left alone. Real line breaks are turned
+    into ``\\N`` by the caller after this runs, so they are not
+    affected.
+    """
+
+    text = text.replace("{", r"\{").replace("}", r"\}")
+    escaped: list[str] = []
+    for i, char in enumerate(text):
+        if char == "\\" and i + 1 < len(text) and text[i + 1] in "NnHh":
+            # \\N / \\n = newline, \\h = hard space in ASS; the
+            # zero-width space keeps the pair from forming.
+            escaped.append("\\\u200b")
+        else:
+            escaped.append(char)
+    return "".join(escaped)
+
+
 def write_ass(cues: Iterable[Cue]) -> str:
     """Write cues as a basic ASS/SSA file (default style, write-only export)."""
 
     lines = [_ASS_HEADER]
     for cue in cues:
-        text = clean_text(cue.text).replace("\n", r"\N")
+        text = _escape_ass_text(clean_text(cue.text)).replace("\n", r"\N")
         lines.append(
             f"Dialogue: 0,{_format_ass_timestamp(cue.start)},{_format_ass_timestamp(cue.end)},Default,,0,0,0,,{text}"
         )

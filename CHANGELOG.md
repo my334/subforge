@@ -4,6 +4,15 @@ All notable changes to SubForge are documented here.
 
 ## Unreleased
 
+- **ASS export** fix: dialogue text containing literal braces or a
+  backslash before N/n/h no longer loses text when burned. In ASS,
+  `{...}` is an override block and `\N` / `\n` / `\h` are control
+  codes, so "{laughs}" vanished from the picture and "C:\New" split
+  into two lines (both verified by rendering the export with ffmpeg's
+  subtitles filter). Braces are now backslash-escaped, and a
+  zero-width space breaks a backslash away from N/n/h so the pair no
+  longer forms a control code; ordinary backslashes and real line
+  breaks are untouched.
 - **`burn`** fix: a subtitle file ffmpeg's subtitles filter cannot read
   (e.g. `.txt`, or no extension at all) is now rejected up front
   (\"burn needs a subtitle file ffmpeg can read (.srt, .vtt, .ass, or

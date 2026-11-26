@@ -455,6 +455,30 @@ class SubtitleTests(unittest.TestCase):
         self.assertIn("Dialogue: 0,0:00:01.00,0:00:03.50,Default", out)
         self.assertIn("Hello world.", out)  # tags stripped by clean_text
 
+    def test_write_ass_escapes_braces_and_backslashes(self):
+        # ASS gives {...} and \N / \n / \h special meaning, so dialogue
+        # containing them was silently reinterpreted when burned:
+        # "{laughs}" vanished from the picture and "C:\New" split into
+        # two lines (both verified by rendering the export with ffmpeg's
+        # subtitles filter). Braces are backslash-escaped, and a
+        # zero-width space breaks a backslash away from N/n/h so the
+        # pair no longer forms a control code; ordinary backslashes and
+        # real line breaks are untouched.
+        out = write_ass(
+            [
+                Cue(start=1.0, end=2.0, text="He said {laughs} loudly"),
+                Cue(start=3.0, end=4.0, text=r"Path C:\New folder"),
+                Cue(start=5.0, end=6.0, text=r"a\h b"),
+                Cue(start=7.0, end=8.0, text="line1\nline2"),
+                Cue(start=9.0, end=10.0, text=r"C:\Users\Bob"),
+            ]
+        )
+        self.assertIn(r"He said \{laughs\} loudly", out)
+        self.assertIn("Path C:\\\u200bNew folder", out)
+        self.assertIn("a\\\u200bh b", out)
+        self.assertIn(r"line1\Nline2", out)
+        self.assertIn(r"C:\Users\Bob", out)
+
 
 if __name__ == "__main__":
     unittest.main()
