@@ -216,6 +216,73 @@ class CliInputTests(unittest.TestCase):
         self.assertIn("not found", str(ctx.exception))
         self.assertIn("no-such-audio.wav", str(ctx.exception))
 
+    def test_media_commands_reject_output_in_missing_directory(self):
+        # An output path in a directory that does not exist used to be
+        # handed straight to ffmpeg, which dumped its full startup
+        # banner and ended with a cryptic "Command failed with exit
+        # code 234" — and transcribe only failed after the Whisper
+        # model had been loaded. Like the subtitle commands, the media
+        # commands must fail up front, and ffmpeg / the model must
+        # never be started.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            subtitles = Path(tmpdir) / "subs.srt"
+            subtitles.write_text("1\n00:00:00,000 --> 00:00:01,000\nHi\n")
+            video = Path(tmpdir) / "in.mp4"
+            video.write_bytes(b"fake video")
+            cases = [
+                (
+                    cmd_extract_audio,
+                    Namespace(
+                        input=video,
+                        output=Path(tmpdir) / "no-such-dir" / "out.wav",
+                    ),
+                ),
+                (
+                    cmd_burn,
+                    Namespace(
+                        input=video,
+                        subtitles=subtitles,
+                        output=Path(tmpdir) / "no-such-dir" / "out.mp4",
+                    ),
+                ),
+                (
+                    cmd_transcribe,
+                    Namespace(
+                        input=video,
+                        output=Path(tmpdir) / "no-such-dir" / "out.srt",
+                        model="small",
+                        language="",
+                    ),
+                ),
+            ]
+            for func, args in cases:
+                with (
+                    patch("subforge.cli._require_ffmpeg", return_value="ffmpeg"),
+                    patch("subforge.cli.subprocess.run") as fake_run,
+                ):
+                    with self.assertRaises(SystemExit) as ctx:
+                        func(args)
+                message = str(ctx.exception)
+                self.assertIn("cannot write output file", message)
+                self.assertIn("no-such-dir", message)
+                fake_run.assert_not_called()
+
+    def test_media_command_rejects_directory_as_output(self):
+        # An output path that is an existing directory is the same
+        # unwritable-output failure, not an ffmpeg error.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            video = Path(tmpdir) / "in.mp4"
+            video.write_bytes(b"fake video")
+            args = Namespace(input=video, output=Path(tmpdir))
+            with (
+                patch("subforge.cli._require_ffmpeg", return_value="ffmpeg"),
+                patch("subforge.cli.subprocess.run") as fake_run,
+            ):
+                with self.assertRaises(SystemExit) as ctx:
+                    cmd_extract_audio(args)
+            self.assertIn("cannot write output file", str(ctx.exception))
+            fake_run.assert_not_called()
+
     def test_clean_negative_min_duration_gives_clear_error(self):        # clean --min-duration -1 used to run and write a cue whose end
         # was before its start; it must fail up front with a usable
         # message instead of producing a file validate would reject.

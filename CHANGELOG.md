@@ -4,6 +4,15 @@ All notable changes to SubForge are documented here.
 
 ## Unreleased
 
+- **CLI** fix: `extract-audio`, `burn` and `transcribe` now reject an
+  unwritable output path up front ("cannot write output file ...:
+  parent directory does not exist") instead of handing it to ffmpeg,
+  which dumped its full startup banner and ended with a cryptic
+  "Command failed with exit code 234" — and for `transcribe` the
+  failure only came after the Whisper model had been loaded. Same
+  wording as the subtitle commands already use for an unwritable
+  output path; an output path that is an existing directory is
+  rejected the same way.
 - **ASS export** fix: dialogue text containing literal braces or a
   backslash before N/n/h no longer loses text when burned. In ASS,
   `{...}` is an override block and `\N` / `\n` / `\h` are control

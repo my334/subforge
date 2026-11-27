@@ -280,8 +280,26 @@ def _require_input_file(path: Path) -> None:
         raise SystemExit(f"Error: input file not found: {path}")
 
 
+def _require_writable_output(path: Path) -> None:
+    # The subtitle commands already report an unwritable output path
+    # this way (see _write_cues), but the media commands handed the
+    # bad path straight to ffmpeg: an output directory typo dumped
+    # ffmpeg's full startup banner and ended with a cryptic
+    # "Command failed with exit code 234" — and for transcribe the
+    # failure only came after the Whisper model had been loaded.
+    # Check up front, before any slow work starts.
+    if path.is_dir():
+        raise SystemExit(f"Error: cannot write output file {path}: Is a directory")
+    if not path.parent.is_dir():
+        raise SystemExit(
+            f"Error: cannot write output file {path}: "
+            f"parent directory does not exist: {path.parent}"
+        )
+
+
 def cmd_extract_audio(args: argparse.Namespace) -> int:
     _require_input_file(args.input)
+    _require_writable_output(args.output)
     ffmpeg = _require_ffmpeg()
     cmd = [
         ffmpeg,
@@ -317,6 +335,7 @@ def cmd_burn(args: argparse.Namespace) -> int:
             f"(.srt, .vtt, .ass, or .ssa), not {subtitles}"
         )
     _require_input_file(args.input)
+    _require_writable_output(args.output)
     # Stage the subtitles under a safe temporary name instead of embedding
     # the user's path in the filter graph: ffmpeg's filter parser mangles
     # quotes and colons in filenames (a path like "it's: tricky.srt" used
@@ -350,6 +369,7 @@ def cmd_burn(args: argparse.Namespace) -> int:
 
 def cmd_transcribe(args: argparse.Namespace) -> int:
     _require_input_file(args.input)
+    _require_writable_output(args.output)
     try:
         from faster_whisper import WhisperModel
     except ImportError:
