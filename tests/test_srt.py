@@ -271,6 +271,39 @@ class SubtitleTests(unittest.TestCase):
         self.assertEqual(pieces[-1].end, 11.0)
         self.assertEqual("".join(p.text for p in pieces), cue.text)
 
+    def test_parse_timestamp_rejects_absurd_hour_counts(self):
+        # A timestamp with hundreds of digits of hours overflowed the
+        # int-to-float conversion and crashed the whole parse with a
+        # raw OverflowError; like any other invalid timestamp it must
+        # fail with ValueError so the parsers skip just that cue.
+        absurd = "9" * 310 + ":00:00,000"
+        with self.assertRaises(ValueError):
+            parse_timestamp(absurd)
+        text = (
+            "1\n" + absurd + " --> " + absurd + "\nBad cue\n\n"
+            "2\n00:00:06,000 --> 00:00:08,000\nGood cue\n"
+        )
+        cues = parse_srt(text)
+        self.assertEqual(len(cues), 1)
+        self.assertEqual(cues[0].text, "Good cue")
+
+    def test_shift_and_scale_reject_overflowing_values(self):
+        # A finite offset / factor can still overflow the timings (a
+        # 3.5 s cue shifted by 1e308 s, or scaled by 1e308): the inf
+        # timings only crashed later in format_timestamp with a raw
+        # OverflowError traceback. Fail up front instead, like the
+        # other non-finite checks — while ordinary large values still
+        # work.
+        cue = [Cue(start=1.0, end=3.5, text="Hello world")]
+        with self.assertRaises(ValueError):
+            shift_cues(cue, 1e308)
+        with self.assertRaises(ValueError):
+            scale_cues(cue, 1e308)
+        shifted = shift_cues(cue, 1e6)
+        self.assertEqual(shifted[0].start, 1000001.0)
+        scaled = scale_cues(cue, 2.0)
+        self.assertEqual(scaled[0].end, 7.0)
+
     def test_parse_timestamp_rejects_out_of_range_fields(self):
         self.assertEqual(parse_timestamp("00:59:59,999"), 3599.999)
         for bad in ("00:60:00,000", "00:75:00,000", "00:00:60,000", "00:00:90,500"):

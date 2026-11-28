@@ -483,6 +483,37 @@ class CliInputTests(unittest.TestCase):
                 cmd_fps(args)
             self.assertIn("retiming factor", str(ctx.exception))
 
+    def test_shift_and_fps_overflowing_values_give_clear_error(self):
+        # A finite --seconds / frame-rate pair can still overflow the
+        # timings themselves (1e308 s on a 3.5 s cue, or a 1e308 fps
+        # factor): the inf timings only crashed later in
+        # format_timestamp with a raw OverflowError traceback. Like
+        # the other bad-limit checks, the commands must fail up front
+        # with a usable message instead.
+        cases = [
+            (
+                cmd_shift,
+                Namespace(
+                    input=Path("examples/sample.srt"),
+                    output=Path("out.srt"),
+                    seconds=1e308,
+                ),
+            ),
+            (
+                cmd_fps,
+                Namespace(
+                    input=Path("examples/sample.srt"),
+                    output=Path("out.srt"),
+                    from_fps=1e308,
+                    to_fps=1.0,
+                ),
+            ),
+        ]
+        for func, args in cases:
+            with self.assertRaises(SystemExit) as ctx:
+                func(args)
+            self.assertIn("overflow", str(ctx.exception))
+
     def test_split_tiny_max_duration_gives_clear_error(self):
         # --max-duration 1e-308 on a multi-second cue overflowed the
         # piece count and crashed with a raw OverflowError traceback.

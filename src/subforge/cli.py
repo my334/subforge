@@ -130,7 +130,13 @@ def cmd_convert(args: argparse.Namespace) -> int:
 
 def cmd_shift(args: argparse.Namespace) -> int:
     _require_finite(args.seconds, "seconds")
-    cues = shift_cues(_read_cues(args.input), args.seconds)
+    try:
+        cues = shift_cues(_read_cues(args.input), args.seconds)
+    except ValueError as exc:
+        # shift_cues rejects an offset that overflows the timings;
+        # surface it as a clean CLI error instead of a raw traceback,
+        # like the other bad-limit checks.
+        raise SystemExit(str(exc)) from None
     _write_cues(args.output, cues)
     print(f"Shifted {len(cues)} cues by {args.seconds:+.3f}s -> {args.output}")
     return 0
@@ -200,7 +206,14 @@ def cmd_fps(args: argparse.Namespace) -> int:
         # traceback instead of a usable message, like the other
         # bad-limit checks already reject up front.
         raise SystemExit("frame rates produce a retiming factor that is not finite and positive")
-    cues = scale_cues(_read_cues(args.input), factor)
+    try:
+        cues = scale_cues(_read_cues(args.input), factor)
+    except ValueError as exc:
+        # scale_cues rejects a factor that overflows the timings (a
+        # finite factor can still do that on a long cue); surface it
+        # as a clean CLI error instead of a raw traceback, like the
+        # other bad-limit checks.
+        raise SystemExit(str(exc)) from None
     _write_cues(args.output, cues)
     print(f"Retimed {len(cues)} cues from {args.from_fps} fps to {args.to_fps} fps (x{factor:.6f}) -> {args.output}")
     return 0

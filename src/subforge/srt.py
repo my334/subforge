@@ -70,7 +70,28 @@ def parse_timestamp(value: str) -> float:
     if minutes >= 60 or seconds >= 60:
         # Without this, "00:75:00,000" would silently parse as 4500s.
         raise ValueError(f"Invalid timestamp: {value!r}")
-    return hours * 3600 + minutes * 60 + seconds + millis / 1000
+    try:
+        return hours * 3600 + minutes * 60 + seconds + millis / 1000
+    except OverflowError:
+        # An absurd hour count (hundreds of digits) overflows the
+        # int-to-float conversion: fail like any other invalid
+        # timestamp, so the parsers skip the cue instead of the whole
+        # parse dying with a raw OverflowError traceback.
+        raise ValueError(f"Invalid timestamp: {value!r}") from None
+
+
+def _is_writable_timestamp(value: float) -> bool:
+    """True when value formats as a timestamp.
+
+    format_timestamp converts seconds to integer milliseconds, so a
+    timing above ~1.8e305 s overflows there even though it is still a
+    finite float; such a timing is not a usable result.
+    """
+
+    try:
+        return math.isfinite(value) and math.isfinite(value * 1000)
+    except (OverflowError, TypeError):
+        return False
 
 
 def format_timestamp(seconds: float, *, vtt: bool = False) -> str:
@@ -86,7 +107,12 @@ def format_timestamp(seconds: float, *, vtt: bool = False) -> str:
         raise ValueError("seconds must be a finite number")
     if seconds < 0:
         seconds = 0.0
-    total_ms = int(round(seconds * 1000))
+    try:
+        total_ms = int(round(seconds * 1000))
+    except OverflowError:
+        # A finite but absurd timing (above ~1.8e305 s) overflows the
+        # seconds-to-milliseconds conversion the same way inf does.
+        raise ValueError("seconds is too large to format as a timestamp") from None
     hours, rem = divmod(total_ms, 3_600_000)
     minutes, rem = divmod(rem, 60_000)
     secs, millis = divmod(rem, 1000)
@@ -245,6 +271,11 @@ def shift_cues(cues: Iterable[Cue], offset_seconds: float) -> list[Cue]:
     for cue in cues:
         start = cue.start + offset_seconds
         end = cue.end + offset_seconds
+        if not (_is_writable_timestamp(start) and _is_writable_timestamp(end)):
+            # A finite offset can still overflow the timings (1e308 s
+            # on a 3.5 s cue): the unformattable timings only crashed
+            # later in format_timestamp with a raw OverflowError.
+            raise ValueError("shifted timings overflow to infinity")
         if end <= 0:
             continue
         shifted.append(replace(cue, start=max(0.0, start), end=end))
@@ -316,7 +347,18 @@ def scale_cues(cues: Iterable[Cue], factor: float) -> list[Cue]:
         raise ValueError("factor must be a finite number")
     if factor <= 0:
         raise ValueError("factor must be positive")
-    return [replace(cue, start=cue.start * factor, end=cue.end * factor) for cue in cues]
+    scaled: list[Cue] = []
+    for cue in cues:
+        start = cue.start * factor
+        end = cue.end * factor
+        if not (_is_writable_timestamp(start) and _is_writable_timestamp(end)):
+            # A finite factor can still overflow the timings (a 3.5 s
+            # cue scaled by 1e308): the unformattable timings only
+            # crashed later in format_timestamp with a raw
+            # OverflowError traceback.
+            raise ValueError("scaled timings overflow to infinity")
+        scaled.append(replace(cue, start=start, end=end))
+    return scaled
 
 
 def _split_text_chunks(text: str, parts: int, max_chars: int) -> list[str]:
@@ -535,7 +577,12 @@ def _format_ass_timestamp(seconds: float) -> str:
         raise ValueError("seconds must be a finite number")
     if seconds < 0:
         seconds = 0.0
-    total_cs = int(round(seconds * 100))
+    try:
+        total_cs = int(round(seconds * 100))
+    except OverflowError:
+        # Same overflow as format_timestamp: a finite but absurd
+        # timing overflows the seconds-to-centiseconds conversion.
+        raise ValueError("seconds is too large to format as a timestamp") from None
     hours, rem = divmod(total_cs, 360_000)
     minutes, rem = divmod(rem, 6_000)
     secs, cs = divmod(rem, 100)
